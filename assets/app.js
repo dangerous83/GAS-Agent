@@ -18,6 +18,9 @@
     glass: { name: 'Glass', label: 'Glassmorphism' },
     clay: { name: 'Clay', label: 'Claymorphism' },
     cyber: { name: 'Cyber', label: 'Cybersecurity' },
+    nebula: { name: 'Nebula', label: 'AI purple' },
+    gold: { name: 'Gold', label: 'Premium' },
+    matte: { name: 'Matte', label: 'Matte black' },
   };
   const DEFAULT_BRAND = { name: 'GAS Agent', tagline: 'Assistant' };
 
@@ -44,11 +47,12 @@
     brand: Object.assign({}, DEFAULT_BRAND, store.get('brand', {})),
     model: store.get('model', null),
     convos: store.get('convos', null) || seedConvos(),
-    artifacts: store.get('artifacts', null) || [
+    artifacts: store.get('artifacts_v2', null) || [
       { name: 'Board update.docx', kind: 'docx', meta: 'Word document · 2 pages', time: now() - 86400e3 * 2 },
       { name: 'Hiring plan.xlsx', kind: 'xlsx', meta: 'Spreadsheet · 3 sheets', time: now() - 86400e3 * 5 },
       { name: 'Product one-pager.pdf', kind: 'pdf', meta: 'PDF · 1 page', time: now() - 86400e3 * 9 },
-      { name: 'Launch banner.png', kind: 'png', meta: 'Image · 1600 × 900', time: now() - 86400e3 * 12 },
+      { name: 'Launch banner.png', kind: 'png', meta: 'Image · 4 variations · 1600 × 1000', time: now() - 86400e3 * 12, media: { kind: 'image', prompt: 'neon city skyline launch banner at night', seed: 314159 } },
+      { name: 'Product teaser.webm', kind: 'webm', meta: 'Video · 6 s · 1280 × 720', time: now() - 86400e3 * 14, media: { kind: 'video', prompt: 'abstract purple AI flow', seed: 271828 } },
     ],
     current: null,
     skin: null,
@@ -66,7 +70,7 @@
 
   const save = () => {
     store.set('convos', state.convos.slice(0, 40));
-    store.set('artifacts', state.artifacts.slice(0, 40));
+    store.set('artifacts_v2', state.artifacts.slice(0, 40));
   };
 
   /* ---------------- Logo ---------------- */
@@ -116,6 +120,347 @@
     $('#log').innerHTML = state.log.map((l) => `<li><time>${l.t}</time><span>${esc(l.msg)}</span></li>`).join('') || '<li>No activity yet.</li>';
   }
 
+  /* ---------------- Media generator (images + video, no API) ----------------
+     Scenes are painted procedurally on <canvas> from the prompt text, so the
+     same prompt + seed always gives the same picture. Video frames use a loop
+     parameter t in [0, 1) so clips repeat seamlessly. */
+  const Gen = (() => {
+    const TAU = Math.PI * 2;
+    const hash = (s) => { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; };
+    const rng = (a) => () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const PALS = {
+      sunset: ['#140b2e', '#4a1d6b', '#b8336a', '#ff7e5f', '#ffd194'],
+      night: ['#03050f', '#0a1433', '#1d3a7a', '#5b82d6', '#dfe8ff'],
+      forest: ['#04110b', '#0d2e20', '#1f5e40', '#6fae6a', '#e3f2c1'],
+      gold: ['#0e0a04', '#33250c', '#7a5a1c', '#d4af37', '#fbe9b0'],
+      neon: ['#06020f', '#240a52', '#7c3aed', '#ec4899', '#22d3ee'],
+      ocean: ['#020f1f', '#06325c', '#1b6ca8', '#62b6e0', '#e6f6ff'],
+      dawn: ['#1a1433', '#3d3a7a', '#8f7fc9', '#f5a3b5', '#fff1d6'],
+      desert: ['#1d0f08', '#5a2a14', '#b45a2a', '#f0a35e', '#ffe2b0'],
+    };
+    const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const rgba = (h, a) => { const [r, g, b] = hex(h); return `rgba(${r},${g},${b},${a})`; };
+    const mix = (a, b, k) => { const A = hex(a), B = hex(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
+
+    function scene(p) {
+      const t = p.toLowerCase();
+      if (/city|skyline|urban|cyberpunk|building|street|downtown|tower/.test(t)) return 'city';
+      if (/ocean|sea|wave|beach|water|lake|coast|surf/.test(t)) return 'ocean';
+      if (/space|galaxy|star|planet|nebula|cosmic|universe|moon|orbit/.test(t)) return 'space';
+      if (/forest|tree|jungle|woods|pine/.test(t)) return 'forest';
+      if (/mountain|landscape|valley|hill|desert|dune|canyon|peak/.test(t)) return 'mountains';
+      return 'abstract';
+    }
+    function palette(p, r) {
+      const t = p.toLowerCase();
+      const pick = [[/sunset|sunrise|dusk|evening|warm/, 'sunset'], [/night|midnight|dark|moon/, 'night'], [/forest|jungle|green|nature/, 'forest'], [/gold|luxury|premium/, 'gold'],
+        [/neon|cyber|futur|synth|purple|ai\b/, 'neon'], [/desert|sand|dune|canyon/, 'desert'], [/dawn|morning|pastel|soft|calm/, 'dawn'], [/ocean|sea|wave|blue|water/, 'ocean']];
+      for (const [re, k] of pick) if (re.test(t)) return PALS[k];
+      const keys = Object.keys(PALS); return PALS[keys[Math.floor(r() * keys.length)]];
+    }
+    const isNight = (p) => /night|midnight|dark|space|galaxy|star|moon|neon|cyber/.test(p.toLowerCase());
+
+    function sky(c, w, h, P, horizon) {
+      const g = c.createLinearGradient(0, 0, 0, h * horizon);
+      g.addColorStop(0, P[0]); g.addColorStop(.5, P[1]); g.addColorStop(.85, P[2]); g.addColorStop(1, P[3]);
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }
+    function sun(c, x, y, rad, P, night) {
+      const glow = c.createRadialGradient(x, y, 0, x, y, rad * 5);
+      glow.addColorStop(0, rgba(P[4], night ? .35 : .6)); glow.addColorStop(1, rgba(P[4], 0));
+      c.fillStyle = glow; c.fillRect(x - rad * 5, y - rad * 5, rad * 10, rad * 10);
+      c.fillStyle = night ? P[4] : mix(P[4], '#ffffff', .3);
+      c.beginPath(); c.arc(x, y, rad, 0, TAU); c.fill();
+    }
+    function stars(c, w, h, seed, n, maxY, t) {
+      const r = rng(seed + 11);
+      for (let i = 0; i < n; i++) {
+        const x = r() * w, y = r() * h * maxY, s = .4 + r() * 1.3, ph = r();
+        c.fillStyle = `rgba(255,255,255,${(.35 + .65 * r()) * (.55 + .45 * Math.sin(TAU * (t * 2 + ph)))})`;
+        c.fillRect(x, y, s, s);
+      }
+    }
+    function ridge(c, w, h, y0, amp, color, seed, shift) {
+      const r = rng(seed); const f = [1, 2, 3, 5].map((k) => ({ k, a: r() / k, p: r() * TAU }));
+      c.fillStyle = color; c.beginPath(); c.moveTo(0, h);
+      for (let x = 0; x <= w; x += 4) {
+        let y = 0; for (const q of f) y += q.a * Math.sin(TAU * q.k * (x / w + shift) + q.p);
+        c.lineTo(x, y0 - y * amp);
+      }
+      c.lineTo(w, h); c.closePath(); c.fill();
+    }
+    function fog(c, w, h, y, P, a) {
+      const g = c.createLinearGradient(0, y - h * .12, 0, y + h * .1);
+      g.addColorStop(0, rgba(P[3], 0)); g.addColorStop(.5, rgba(P[3], a)); g.addColorStop(1, rgba(P[3], 0));
+      c.fillStyle = g; c.fillRect(0, y - h * .12, w, h * .22);
+    }
+
+    const SCENES = {
+      city(c, w, h, P, seed, t, night) {
+        sky(c, w, h, P, .8);
+        if (night) stars(c, w, h, seed, 140, .5, t);
+        sun(c, w * (.3 + rng(seed)() * .4), h * .5, h * .07, P, night);
+        const horizon = h * .78;
+        for (let L = 0; L < 3; L++) {
+          const r = rng(seed + L * 97); let x = -10;
+          const col = mix(P[1], P[0], .35 + L * .3);
+          while (x < w) {
+            const bw = (24 + r() * 60) * (w / 900) * (1 + L * .25);
+            const bh = h * (.12 + r() * .32) * (.7 + L * .25);
+            c.fillStyle = col; c.fillRect(x, horizon - bh, bw, bh + h);
+            if (r() > .6) c.fillRect(x + bw * .45, horizon - bh - h * .04, bw * .08, h * .04);
+            const ws = Math.max(3, w / 300);
+            for (let wy = horizon - bh + ws * 2; wy < horizon - ws; wy += ws * 2.4) {
+              for (let wx = x + ws; wx < x + bw - ws; wx += ws * 2.2) {
+                const k = r(); const lit = k < .28 + .1 * Math.sin(TAU * (t + k * 5));
+                if (lit) { c.fillStyle = rgba(P[4], (.25 + L * .3) * (.6 + .4 * k)); c.fillRect(wx, wy, ws, ws * 1.2); }
+              }
+            }
+            x += bw + 2 + r() * 6;
+          }
+        }
+        c.fillStyle = mix(P[0], '#000000', .3); c.fillRect(0, horizon, w, h - horizon);
+        const refl = c.createLinearGradient(0, horizon, 0, h); refl.addColorStop(0, rgba(P[3], .25)); refl.addColorStop(1, rgba(P[3], 0));
+        c.fillStyle = refl; c.fillRect(0, horizon, w, h - horizon);
+        const r2 = rng(seed + 5);
+        for (let i = 0; i < 10; i++) {
+          const y = horizon + 6 + r2() * (h - horizon - 12), sp = .5 + r2(), dir = r2() > .5 ? 1 : -1;
+          const x = (((r2() + dir * t * sp) % 1) + 1) % 1 * w;
+          c.fillStyle = rgba(i % 2 ? P[4] : P[3], .9); c.fillRect(x, y, w * .02, 2);
+        }
+        fog(c, w, h, horizon, P, .25);
+      },
+      ocean(c, w, h, P, seed, t, night) {
+        const horizon = h * .55;
+        sky(c, w, h, P, .58);
+        if (night) stars(c, w, h, seed, 160, .5, t);
+        const sx = w * (.35 + rng(seed)() * .3);
+        sun(c, sx, horizon - h * .1, h * .07, P, night);
+        const sea = c.createLinearGradient(0, horizon, 0, h);
+        sea.addColorStop(0, P[2]); sea.addColorStop(.4, P[1]); sea.addColorStop(1, P[0]);
+        c.fillStyle = sea; c.fillRect(0, horizon, w, h - horizon);
+        for (let i = 0; i < 26; i++) {
+          const y = horizon + 4 + i * (h - horizon) / 30; const len = (w * .14) * (1 - i / 34);
+          const jit = Math.sin(TAU * (t * 2 + i * .17)) * w * .012;
+          c.fillStyle = rgba(P[4], .55 * (1 - i / 26)); c.fillRect(sx - len / 2 + jit, y, len, 1.6);
+        }
+        for (let i = 0; i < 7; i++) {
+          const y0 = horizon + Math.pow(i + 1, 1.55) * (h - horizon) / 22; const amp = 2 + i * 2.6;
+          const r = rng(seed + i * 13); const ph = r() * TAU; const f = 3 + Math.floor(r() * 4); const dir = i % 2 ? 1 : -1;
+          c.beginPath(); c.moveTo(0, h);
+          for (let x = 0; x <= w; x += 6) c.lineTo(x, y0 + Math.sin(TAU * f * (x / w) + ph + dir * TAU * t) * amp);
+          c.lineTo(w, h); c.closePath();
+          c.fillStyle = rgba(mix(P[1], P[0], i / 7), .55);
+          c.fill();
+          c.strokeStyle = rgba(P[4], .12 + i * .02); c.lineWidth = 1; c.stroke();
+        }
+      },
+      mountains(c, w, h, P, seed, t, night) {
+        sky(c, w, h, P, .75);
+        if (night) stars(c, w, h, seed, 150, .55, t);
+        sun(c, w * (.25 + rng(seed)() * .5), h * .38, h * .08, P, night);
+        const layers = 5;
+        for (let i = 0; i < layers; i++) {
+          const k = i / (layers - 1);
+          ridge(c, w, h, h * (.5 + k * .32), h * (.16 - k * .05), mix(P[2], P[0], .25 + k * .7), seed + i * 31, t * (i % 2 ? 1 : 0) + i * .13);
+          if (i < layers - 1) fog(c, w, h, h * (.55 + k * .32), P, .18);
+        }
+      },
+      space(c, w, h, P, seed, t) {
+        const bg = c.createRadialGradient(w * .5, h * .5, 0, w * .5, h * .5, w * .8);
+        bg.addColorStop(0, P[1]); bg.addColorStop(1, P[0]); c.fillStyle = bg; c.fillRect(0, 0, w, h);
+        const r = rng(seed + 3);
+        c.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 8; i++) {
+          const x = w * (.15 + r() * .7) + Math.sin(TAU * (t + i * .1)) * w * .02, y = h * (.15 + r() * .7) + Math.cos(TAU * (t + i * .13)) * h * .02;
+          const rad = w * (.15 + r() * .25); const col = P[2 + (i % 3)];
+          const g = c.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, rgba(col, .22)); g.addColorStop(1, rgba(col, 0));
+          c.fillStyle = g; c.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+        }
+        c.globalCompositeOperation = 'source-over';
+        stars(c, w, h, seed, 380, 1, t);
+        const px = w * (.62 + r() * .2), py = h * (.55 + r() * .15), pr = h * (.16 + r() * .08);
+        const pg = c.createRadialGradient(px - pr * .4, py - pr * .4, pr * .1, px, py, pr);
+        pg.addColorStop(0, P[4]); pg.addColorStop(.45, P[3]); pg.addColorStop(1, mix(P[1], '#000000', .5));
+        c.save(); c.translate(px, py); c.rotate(-.35);
+        c.strokeStyle = rgba(P[4], .35); c.lineWidth = pr * .06; c.beginPath(); c.ellipse(0, 0, pr * 1.9, pr * .45, 0, Math.PI, TAU); c.stroke();
+        c.restore();
+        c.fillStyle = pg; c.beginPath(); c.arc(px, py, pr, 0, TAU); c.fill();
+        c.save(); c.translate(px, py); c.rotate(-.35);
+        c.strokeStyle = rgba(P[4], .55); c.lineWidth = pr * .06; c.beginPath(); c.ellipse(0, 0, pr * 1.9, pr * .45, 0, 0, Math.PI); c.stroke();
+        c.restore();
+        const sh = (t * 1.0) % 1; if (sh < .25) { const k = sh / .25; c.strokeStyle = `rgba(255,255,255,${.8 * (1 - k)})`; c.lineWidth = 1.5; c.beginPath(); c.moveTo(w * (.1 + k * .4), h * (.1 + k * .2)); c.lineTo(w * (.1 + k * .4) - w * .06, h * (.1 + k * .2) - h * .03); c.stroke(); }
+      },
+      forest(c, w, h, P, seed, t, night) {
+        sky(c, w, h, P, .7);
+        if (night) stars(c, w, h, seed, 120, .45, t);
+        sun(c, w * (.3 + rng(seed)() * .4), h * .3, h * .07, P, night);
+        for (let L = 0; L < 4; L++) {
+          const r = rng(seed + L * 41); const k = L / 3; const base = h * (.6 + k * .3);
+          c.fillStyle = mix(P[2], P[0], .3 + k * .65);
+          c.fillRect(0, base, w, h - base);
+          let x = -20;
+          while (x < w + 20) {
+            const th = h * (.12 + r() * .14) * (1 + k * .8), tw = th * (.32 + r() * .1);
+            c.beginPath(); c.moveTo(x, base - th);
+            for (let s = 1; s <= 3; s++) { c.lineTo(x + tw * s / 3, base - th + th * s / 3); c.lineTo(x + tw * s / 6, base - th + th * s / 3); }
+            for (let s = 3; s >= 1; s--) { c.lineTo(x - tw * s / 6, base - th + th * s / 3); c.lineTo(x - tw * s / 3, base - th + th * s / 3); }
+            c.closePath(); c.fill();
+            x += tw * (.6 + r() * .8);
+          }
+          if (L < 3) { c.save(); c.translate(Math.sin(TAU * (t + L * .2)) * w * .03, 0); fog(c, w, h, base + h * .02, P, .22); c.restore(); }
+        }
+      },
+      abstract(c, w, h, P, seed, t) {
+        c.fillStyle = P[0]; c.fillRect(0, 0, w, h);
+        const r = rng(seed + 7);
+        c.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 7; i++) {
+          const cx = w * (.15 + r() * .7), cy = h * (.15 + r() * .7), ax = w * (.06 + r() * .12), ay = h * (.06 + r() * .12), ph = r();
+          const x = cx + ax * Math.sin(TAU * (t + ph)), y = cy + ay * Math.cos(TAU * (t + ph * 1.3));
+          const rad = w * (.18 + r() * .22); const col = P[2 + (i % 3)];
+          const g = c.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, rgba(col, .55)); g.addColorStop(1, rgba(col, 0));
+          c.fillStyle = g; c.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+        }
+        c.globalCompositeOperation = 'source-over';
+        c.lineWidth = Math.max(1, w / 700);
+        for (let i = 0; i < 18; i++) {
+          const y0 = h * (i / 18) + Math.sin(TAU * (t + i * .05)) * h * .03; const a = r() * h * .25;
+          c.strokeStyle = rgba(P[4], .05 + r() * .12); c.beginPath(); c.moveTo(-10, y0);
+          c.bezierCurveTo(w * .3, y0 - a, w * .7, y0 + a, w + 10, y0 + Math.cos(TAU * (t + i * .07)) * h * .05); c.stroke();
+        }
+      },
+    };
+
+    function draw(c, w, h, prompt, seed, t) {
+      const r = rng(seed); const P = palette(prompt, r); const s = scene(prompt);
+      c.save(); c.clearRect(0, 0, w, h);
+      SCENES[s](c, w, h, P, seed, t, isNight(prompt));
+      const v = c.createRadialGradient(w / 2, h / 2, Math.min(w, h) * .35, w / 2, h / 2, Math.max(w, h) * .75);
+      v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.42)');
+      c.fillStyle = v; c.fillRect(0, 0, w, h);
+      c.restore();
+    }
+    function title(prompt) {
+      let p = prompt.trim().replace(/^(please\s+)?(can you\s+|could you\s+)?(generate|create|make|draw|render|design|produce|paint|show)(\s+me)?\s+/i, '')
+        .replace(/^(an?\s+|the\s+)?(\d+[- ]?(second|sec|s)\s+)?(hd\s+)?(image|picture|photo|illustration|video|clip|animation|poster|wallpaper|artwork|render)s?\s*(of|showing|with|about|for)?\s*/i, '')
+        .replace(/[.!?]+$/, '').trim();
+      if (!p) p = 'Untitled';
+      p = p.charAt(0).toUpperCase() + p.slice(1);
+      return p.length > 48 ? p.slice(0, 46).trim() + '…' : p;
+    }
+    return { draw, hash, title, scene };
+  })();
+
+  function canvasFor(spec, w, h, t = 0.3) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    Gen.draw(cv.getContext('2d'), w, h, spec.prompt, spec.seed, t);
+    return cv;
+  }
+  const variationSeed = (spec, i) => (spec.seed + i * 7919) >>> 0;
+  function downloadCanvas(cv, name) {
+    try {
+      const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = name; document.body.append(a); a.click(); a.remove();
+      toast(`Downloading ${name}`, 'download');
+    } catch { toast('Download was blocked by the browser.', 'x'); }
+  }
+
+  function mountImages(el, spec) {
+    el.className = 'gen-wrap';
+    const grid = document.createElement('div'); grid.className = 'gen-grid';
+    for (let i = 0; i < 4; i++) {
+      const fig = document.createElement('figure'); fig.tabIndex = 0; fig.setAttribute('role', 'button'); fig.setAttribute('aria-label', `Open variation ${i + 1}`);
+      fig.append(canvasFor({ prompt: spec.prompt, seed: variationSeed(spec, i) }, 640, 400));
+      const cap = document.createElement('figcaption'); cap.textContent = `V${i + 1}`; fig.append(cap);
+      const open = () => openLightbox(Object.assign({}, spec, { variant: i }));
+      fig.addEventListener('click', open);
+      fig.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+      grid.append(fig);
+    }
+    el.replaceChildren(grid);
+  }
+
+  function mountVideo(el, spec, opts = {}) {
+    const W = opts.w || 960, H = opts.h || 540, DUR = 6;
+    el.className = 'player';
+    el.innerHTML = `<canvas width="${W}" height="${H}"></canvas><span class="pl-badge">HD · ${DUR}s</span>
+      <div class="player-bar"><button type="button" class="pl-btn pl-play" aria-label="Pause">${icon('pause')}</button>
+      <input type="range" min="0" max="1000" value="0" aria-label="Seek"><span class="pl-time">0:00 / 0:0${DUR}</span>
+      <button type="button" class="pl-btn pl-dl" aria-label="Download clip" title="Download as WebM">${icon('download')}</button></div>`;
+    const cv = $('canvas', el), ctx = cv.getContext('2d'), range = $('input', el), time = $('.pl-time', el), play = $('.pl-play', el);
+    let playing = !reduced, pos = 0, last = performance.now(), seeking = false;
+    const paint = () => Gen.draw(ctx, W, H, spec.prompt, spec.seed, pos);
+    const setBtn = () => { play.innerHTML = icon(playing ? 'pause' : 'play'); play.setAttribute('aria-label', playing ? 'Pause' : 'Play'); };
+    setBtn(); paint();
+    function frame(now) {
+      if (!cv.isConnected) return;
+      const dt = Math.min(.1, (now - last) / 1000); last = now;
+      if (playing && !seeking && cv.offsetParent !== null) {
+        pos = (pos + dt / DUR) % 1; paint();
+        range.value = Math.round(pos * 1000);
+        time.textContent = `0:0${Math.floor(pos * DUR)} / 0:0${DUR}`;
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    play.addEventListener('click', () => { playing = !playing; setBtn(); });
+    range.addEventListener('input', () => { seeking = true; pos = range.value / 1000; paint(); time.textContent = `0:0${Math.floor(pos * DUR)} / 0:0${DUR}`; });
+    range.addEventListener('change', () => { seeking = false; });
+    $('.pl-dl', el).addEventListener('click', () => {
+      if (!cv.captureStream || !window.MediaRecorder) { toast('Video export is not supported in this browser.', 'x'); return; }
+      try {
+        const type = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+        const rec = new MediaRecorder(cv.captureStream(30), { mimeType: type }); const chunks = [];
+        rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        rec.onstop = () => {
+          $('.pl-rec', el)?.remove();
+          const url = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+          const a = document.createElement('a'); a.href = url; a.download = Gen.title(spec.prompt) + '.webm'; document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+          toast('Clip exported as WebM', 'download');
+        };
+        pos = 0; playing = true; setBtn();
+        el.insertAdjacentHTML('beforeend', '<span class="pl-rec">● REC</span>');
+        rec.start(); toast(`Recording the ${DUR}-second clip…`, 'video');
+        setTimeout(() => rec.stop(), DUR * 1000 + 100);
+      } catch { toast('Video export could not start in this browser.', 'x'); }
+    });
+  }
+
+  function hydrateMedia(root) {
+    $$('.media-slot', root).forEach((el) => {
+      let spec; try { spec = JSON.parse(el.dataset.media); } catch { return; }
+      el.classList.remove('media-slot');
+      if (spec.kind === 'video') mountVideo(el, spec); else mountImages(el, spec);
+    });
+  }
+
+  function openLightbox(spec) {
+    const stage = $('#lbStage'); const name = Gen.title(spec.prompt);
+    $('#lb-h').textContent = name;
+    let cv = null;
+    if (spec.kind === 'video') {
+      $('#lbMeta').textContent = 'Video · 6 s loop · 1280 × 720 · rendered in your browser';
+      const holder = document.createElement('div'); stage.replaceChildren(holder);
+      mountVideo(holder, spec, { w: 1280, h: 720 });
+    } else {
+      const v = spec.variant || 0;
+      $('#lbMeta').textContent = `Image · variation ${v + 1} of 4 · 1600 × 1000 · seed ${variationSeed(spec, v)}`;
+      cv = canvasFor({ prompt: spec.prompt, seed: variationSeed(spec, v) }, 1600, 1000);
+      stage.replaceChildren(cv);
+    }
+    const acts = $('#lbActions'); acts.innerHTML = '';
+    const mk = (label, ico, fn, primary) => { const b = document.createElement('button'); b.type = 'button'; b.className = primary ? 'btn-primary' : 'btn-ghost'; b.innerHTML = icon(ico) + esc(label); b.onclick = fn; acts.append(b); };
+    if (spec.kind !== 'video') {
+      mk('Previous', 'left', () => openLightbox(Object.assign({}, spec, { variant: ((spec.variant || 0) + 3) % 4 })));
+      mk('Next', 'right', () => openLightbox(Object.assign({}, spec, { variant: ((spec.variant || 0) + 1) % 4 })));
+      mk('Download PNG', 'download', () => downloadCanvas(cv, `${name} v${(spec.variant || 0) + 1}.png`), true);
+    } else {
+      mk('Download WebM', 'download', () => $('#lbStage .pl-dl').click(), true);
+    }
+    if ($('#lightbox').hidden) openModal('lightbox');
+  }
+
   /* ---------------- Greeting ---------------- */
   function greeting() {
     const h = new Date().getHours();
@@ -155,6 +500,8 @@
     if (changed) { app.style.animation = 'none'; void app.offsetWidth; app.style.animation = ''; }
     applyBrand();
     paintGreeting();
+    $('#skinSw').className = 'sw sw-' + id;
+    $('#skinName').textContent = SKINS[id].name;
     if (changed) log(`Switched to ${SKINS[id].name} interface`);
     if (id === 'cyber') { startClock(); if (!bootedCyber) { bootedCyber = true; boot(); } } else stopClock();
   }
@@ -219,7 +566,7 @@
     projects: { title: 'Projects', sub: 'Workspace · Projects', icon: 'folder', desc: 'Group chats, files and instructions so the agent keeps context for a piece of work.', action: 'New project', run: () => addProject(),
       items: () => state.projects },
     artifacts: { title: 'Artifacts', sub: 'Workspace · Artifacts', icon: 'grid', desc: 'Documents, spreadsheets, PDFs and images the agent has created. New files from chat appear here.', action: 'Create in chat', run: () => newChat(),
-      items: () => state.artifacts.map((a) => ({ ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name })) },
+      items: () => state.artifacts.map((a) => ({ ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image', webm: 'video' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3', webm: 'c4' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name, media: a.media })) },
     scheduled: { title: 'Scheduled', sub: 'Workspace · Scheduled', icon: 'clock', desc: 'Tasks the agent runs on a timetable, like a morning inbox digest or a Friday report.', action: 'New schedule', run: () => addSchedule(),
       items: () => state.schedules },
     team: { title: 'Team room', sub: 'Workspace · Team room', icon: 'users', desc: 'Share chats and agents with teammates. Everyone sees the same files and history.', action: 'Copy invite link', run: () => copy(location.href.split('#')[0] + '#' + (state.skin || 'glass'), 'Invite link copied'),
@@ -268,6 +615,7 @@
     const cards = items.map((it, i) => {
       const tag = it.toggle ? 'div' : 'button';
       return `<${tag} class="card${flash && it.id === flash ? ' flash' : ''}" style="animation-delay:${i * 40}ms" data-card="${i}">
+        ${it.media ? `<div class="card-thumb" data-thumb="${esc(JSON.stringify(it.media))}">${it.media.kind === 'video' ? '<span class="pl-badge">▶ 0:06</span>' : ''}</div>` : ''}
         <div class="card-top"><span class="card-ico ${it.c || 'c1'}">${icon(it.ico)}</span><h3>${esc(it.title)}</h3></div>
         <p>${esc(it.text)}</p>
         <div class="card-foot"><span>${esc(it.foot || '')}</span>
@@ -286,6 +634,9 @@
       </div>
       <div class="cards">${cards || '<p class="note">Nothing here yet.</p>'}</div>`;
     $('#sectionInner [data-sec-action]').onclick = s.run;
+    $$('#sectionInner [data-thumb]').forEach((el) => {
+      try { const m = JSON.parse(el.dataset.thumb); el.prepend(canvasFor(m, 480, 270, .25)); } catch { /* bad thumb spec */ }
+    });
     $$('#sectionInner [data-toggle]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
       const it = items[+b.dataset.toggle]; it.on = !it.on;
@@ -295,7 +646,7 @@
     }));
     $$('#sectionInner button.card').forEach((c) => c.addEventListener('click', () => {
       const it = items[+c.dataset.card];
-      if (id === 'artifacts') toast(`${it.title} is ready to open in the desktop app`, 'file');
+      if (id === 'artifacts') { if (it.media) openLightbox(it.media); else toast(`${it.title} is ready to open in the desktop app`, 'file'); }
       else if (id === 'projects' || id === 'team') { newChat(); $('#prompt').value = `Let's continue with "${it.title}". `; autosize(); $('#prompt').focus(); }
       else if (id === 'code') { newChat(); $('#prompt').value = `In ${it.title}, `; autosize(); $('#prompt').focus(); }
     }));
@@ -350,6 +701,7 @@
     if (c) c.messages.forEach((m) => th.append(msgEl(m)));
     applyBrand();
     paintLogos(th);
+    hydrateMedia(th);
     scrollDown(true);
     renderRecents();
   }
@@ -378,6 +730,26 @@
     if (state.mode === 'Plan') B.push({ type: 'p', text: 'Plan mode is on, so here is the plan before I touch anything.' });
     if (files && files.length) B.push({ type: 'p', text: `I received ${files.length} attachment${files.length > 1 ? 's' : ''}: ${files.join(', ')}. I'll use ${files.length > 1 ? 'them' : 'it'} as context.` });
 
+    const wantsVideo = /\b(video|clip|animation|animate|movie|footage|reel)\b/.test(t);
+    const wantsImage = !wantsVideo && /\b(image|images|picture|photo|illustration|draw|drawing|render|wallpaper|artwork|poster|logo|painting)\b/.test(t);
+    if (wantsVideo || wantsImage) {
+      const spec = { kind: wantsVideo ? 'video' : 'image', prompt: text, seed: Gen.hash(text + now()) };
+      const name = Gen.title(text);
+      const B2 = [{ type: 'note', text: 'Test generation: rendered in your browser with no API, so you can try the flow. Connect a model provider for real AI images and video.' }];
+      if (state.mode === 'Plan') B2.push({ type: 'p', text: `Plan: read the prompt, compose the scene, render ${wantsVideo ? 'a 6-second loop' : '4 variations'}, then save to Artifacts.` });
+      if (wantsVideo) {
+        B2.push({ type: 'p', text: `Here is a 6-second clip of "${name}". It loops; pause, scrub or download it as WebM with the controls.` });
+        B2.push({ type: 'media', spec, label: 'Generating video', steps: ['Reading prompt', 'Building storyboard', 'Rendering 180 frames', 'Encoding preview'] });
+        B2.push({ type: 'meta', items: ['960 × 540 preview', '30 fps', '6 s loop', `seed ${spec.seed}`] });
+        B2.push({ type: 'file', name: name + '.webm', kind: 'webm', meta: 'Video · 6 s · 1280 × 720 · saved to Artifacts', media: spec });
+      } else {
+        B2.push({ type: 'p', text: `Here are 4 variations of "${name}". Click any image to view it full size or download it as PNG.` });
+        B2.push({ type: 'media', spec, label: 'Generating 4 images', steps: ['Reading prompt', 'Composing scene', 'Rendering variations', 'Upscaling to 1600 × 1000'] });
+        B2.push({ type: 'meta', items: ['4 variations', '1600 × 1000 PNG', `seed ${spec.seed}`] });
+        B2.push({ type: 'file', name: name + '.png', kind: 'png', meta: 'Image · 4 variations · 1600 × 1000 · saved to Artifacts', media: spec });
+      }
+      return B2;
+    }
     if (/word|docx|summary|one-page|document/.test(t)) {
       B.push({ type: 'p', text: 'Here is a one-page summary structure. I filled it with a clear headline, three key points, risks and next steps, then saved it as a Word document in your workspace.' });
       B.push({ type: 'list', items: ['Headline and one-sentence takeaway', 'Three key points with supporting facts', 'Risks and open questions', 'Next steps with owners and dates'] });
@@ -419,7 +791,9 @@
       case 'p': return `<p>${esc(b.text)}</p>`;
       case 'note': return `<p class="note">${esc(b.text)}</p>`;
       case 'list': return `<ul>${b.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
-      case 'file': return `<div class="file-card"><span class="fc-ico ${b.kind}">${icon(b.kind === 'xlsx' ? 'sheet' : 'file')}</span><span class="fc-text"><b>${esc(b.name)}</b><small>${esc(b.meta)}</small></span><button class="fc-open" data-artifact="${esc(b.name)}">Open</button></div>`;
+      case 'media': return `<div class="media-slot" data-media="${esc(JSON.stringify(b.spec))}"></div>`;
+      case 'meta': return `<p class="gen-meta">${b.items.map((i) => `<span>${esc(i)}</span>`).join('')}</p>`;
+      case 'file': return `<div class="file-card"><span class="fc-ico ${b.kind}">${icon({ xlsx: 'sheet', png: 'image', webm: 'video' }[b.kind] || 'file')}</span><span class="fc-text"><b>${esc(b.name)}</b><small>${esc(b.meta)}</small></span><button class="fc-open" data-artifact="${esc(b.name)}">Open</button></div>`;
       case 'table': return `<div class="tbl-wrap"><table class="tbl"><thead><tr>${b.head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map((r) => `<tr>${r.map((c) => `<td>${Array.isArray(c) ? `<span class="pill ${c[0]}">${esc(c[1])}</span>` : esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
       case 'files': return `<ul class="flist">${b.items.map((f) => `<li>${icon(/\/$/.test(f.name) ? 'folder' : 'file')}<span>${esc(f.name)}</span><small>${esc(f.size || '')}</small></li>`).join('')}</ul>`;
       default: return '';
@@ -461,6 +835,20 @@
         const p = document.createElement('p'); p.className = 'caret'; body.append(p);
         for (let i = 0; i <= b.text.length; i += 3) { p.textContent = b.text.slice(0, i); if (i % 30 === 0) scrollDown(true); await sleep(10); }
         p.textContent = b.text; p.classList.remove('caret');
+      } else if (b.type === 'media') {
+        const prog = document.createElement('div'); prog.className = 'gen-progress';
+        prog.innerHTML = `<div class="gp-top"><span>${esc(b.label)}</span><span>0%</span></div><div class="gp-bar"><i></i></div><small>${esc(b.steps[0])}…</small>`;
+        body.append(prog); scrollDown(true);
+        const total = reduced ? 1 : (b.spec.kind === 'video' ? 34 : 26);
+        for (let i = 1; i <= total; i++) {
+          const pct = Math.round((i / total) * 100);
+          $('.gp-top span:last-child', prog).textContent = pct + '%';
+          $('.gp-bar i', prog).style.width = pct + '%';
+          $('small', prog).textContent = b.steps[Math.min(b.steps.length - 1, Math.floor((i / total) * b.steps.length))] + '…';
+          await sleep(reduced ? 0 : 70 + Math.random() * 50);
+        }
+        prog.outerHTML = blockHTML(b);
+        hydrateMedia(body);
       } else {
         body.insertAdjacentHTML('beforeend', blockHTML(b));
         await sleep(reduced ? 0 : 120);
@@ -472,7 +860,7 @@
     c.updated = now();
     blocks.filter((b) => b.type === 'file').forEach((b) => {
       state.artifacts = state.artifacts.filter((a) => a.name !== b.name);
-      state.artifacts.unshift({ name: b.name, kind: b.kind, meta: b.meta.split(' · saved')[0], time: now() });
+      state.artifacts.unshift({ name: b.name, kind: b.kind, meta: b.meta.split(' · saved')[0], time: now(), media: b.media });
       log(`Created ${b.name}`);
     });
     save(); renderRecents();
@@ -597,6 +985,22 @@
       + `<button class="pop-item" data-pick="__setup">${icon('key')}<span><b>${state.model ? 'Change provider' : 'Set up a model'}</b><small>OpenRouter, OpenAI, Anthropic, Gemini, LM Studio, Ollama</small></span></button>`,
       (v) => { if (v === '__setup') openModel(); else { state.choice = v; paintModel(); } });
   }
+  function skinMenu(a) {
+    popover(a, `<p class="pop-title">Interface</p>` + Object.entries(SKINS).map(([k, v]) => `<button class="pop-item" data-pick="${k}"><span class="sw sw-${k}"></span><span><b>${v.name}</b><small>${v.label}</small></span>${state.skin === k ? icon('check', 'chk') : ''}</button>`).join('')
+      + `<div class="pop-sep"></div><button class="pop-item" data-pick="__home">${icon('home')}<span><b>Home</b><small>Back to all six interfaces</small></span></button>`,
+      (v) => { location.hash = v === '__home' ? '' : v; });
+  }
+  function plusMenu(a) {
+    popover(a, `<p class="pop-title">Add or create</p>
+      <button class="pop-item" data-pick="files">${icon('clip')}<span><b>Attach files</b><small>Add documents or images as context</small></span></button>
+      <button class="pop-item" data-pick="image">${icon('image')}<span><b>Generate an image</b><small>4 variations, test mode, no API</small></span></button>
+      <button class="pop-item" data-pick="video">${icon('video')}<span><b>Create a video</b><small>6-second loop, test mode, no API</small></span></button>`,
+      (v) => {
+        if (v === 'files') { $('#fileInput').click(); return; }
+        $('#prompt').value = v === 'image' ? 'Generate an image of ' : 'Create a 6-second video of ';
+        autosize(); const ta = $('#prompt'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+      });
+  }
   function notifMenu(a) {
     $('#bellBtn').classList.remove('has-dot');
     popover(a, `<p class="pop-title">Notifications</p>
@@ -618,6 +1022,8 @@
       { g: 'Actions', label: 'New chat', ico: 'plus', run: newChat, hint: 'N' },
       { g: 'Actions', label: state.model ? 'Change model provider' : 'Set up a model', ico: 'key', run: openModel },
       { g: 'Actions', label: 'Open local folder', ico: 'folder', run: pickFolder },
+      { g: 'Actions', label: 'Generate an image', ico: 'image', run: () => { newChat(); $('#prompt').value = 'Generate an image of '; autosize(); } },
+      { g: 'Actions', label: 'Create a video', ico: 'video', run: () => { newChat(); $('#prompt').value = 'Create a 6-second video of '; autosize(); } },
       { g: 'Actions', label: 'Settings', ico: 'settings', run: openSettings },
       { g: 'Actions', label: 'Guide & tour', ico: 'compass', run: startTour },
       ...Object.entries(SECTIONS).map(([k, s]) => ({ g: 'Go to', label: s.title, ico: s.icon, run: () => showSection(k) })),
@@ -715,8 +1121,9 @@
   const TOUR = [
     { sel: '.sidebar', title: 'Your workspace', text: 'Start new chats, find recent ones, and jump to Code, Projects, Artifacts, Scheduled tasks, the Team room and Agents.' },
     { sel: '#connectCard', title: 'Connect a model', text: 'Bring your own key from OpenRouter, OpenAI, Anthropic or Gemini, or run locally with LM Studio or Ollama.' },
-    { sel: '.composer', title: 'Ask anything', text: 'Attach files, pick a folder, switch modes, use your voice and choose whether the agent can act without asking.' },
-    { sel: '.skin-switch', title: 'Switch interface', text: 'Jump between Glass, Clay and Cyber at any time. Your chats and settings come with you.' },
+    { sel: '.composer', title: 'Ask anything', text: 'Attach files, generate images and videos with the + button, pick a folder, switch modes, use your voice and choose whether the agent can act without asking.' },
+    { sel: '.skin-btn', title: 'Switch interface', text: 'Jump between all six interfaces at any time. Your chats and settings come with you.' },
+    { sel: '.home-btn', title: 'Back home', text: 'Return to the studio home page to compare and choose another interface.' },
   ];
   let tourI = -1;
   function startTour() {
@@ -773,6 +1180,7 @@
       const rm = e.target.closest('[data-rm]');
       const pal = e.target.closest('#palList [role=option]');
       if (!e.target.closest('#popover') && !e.target.closest('[data-action$="-menu"], [data-action="notifications"]')) closePopover();
+      if (e.target.closest('.home-btn')) { closeNav(); }
       if (pal) { palRun(+pal.dataset.i); return; }
       if (rm) { state.attachments.splice(+rm.dataset.rm, 1); renderAttachments(); return; }
       if (art) { showSection('artifacts'); renderSection('artifacts', art.dataset.artifact); return; }
@@ -796,6 +1204,8 @@
         'open-folder': pickFolder,
         'attach': () => $('#fileInput').click(),
         'mode-menu': () => modeMenu(a),
+        'skin-menu': () => skinMenu(a),
+        'plus-menu': () => plusMenu(a),
         'model-menu': () => modelMenu(a),
         'notifications': () => notifMenu(a),
         'mic': toggleMic,
@@ -812,7 +1222,7 @@
     $('#prompt').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
     });
-    $$('.suggest').forEach((b) => b.addEventListener('click', () => send(b.textContent)));
+    $$('.suggest').forEach((b) => b.addEventListener('click', () => send(b.textContent.trim())));
     $('#recentSearch').addEventListener('input', renderRecents);
     $('#modelForm').addEventListener('submit', connectModel);
     $('#providers').addEventListener('click', (e) => {
