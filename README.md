@@ -17,17 +17,9 @@ Open `index.html` in a browser (no build step) to see the studio launcher and pi
 
 This is a static site, so Vercel needs no build settings.
 
-### Automatic (GitHub Actions)
+This repository is connected to Vercel through the Vercel GitHub integration (project `gas-agent`). Every push to `main` deploys to production and every other branch gets a preview URL; no GitHub Actions setup is needed.
 
-`.github/workflows/vercel-deploy.yml` deploys on every push: `main` goes to production, other branches get preview URLs. One-time setup:
-
-1. Create a token at https://vercel.com/account/tokens.
-2. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret**, name it `VERCEL_TOKEN` and paste the token.
-3. Push, or run the workflow from the **Actions** tab. The Vercel project `gas-agent` is created on the first run, and the run summary shows the live URL.
-
-For a Vercel team account, also add a `VERCEL_SCOPE` secret with the team slug.
-
-### Manual (Vercel dashboard)
+To connect a fork or a new copy:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdangerous83%2FGAS-Agent)
 
