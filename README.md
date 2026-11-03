@@ -7,9 +7,9 @@ A white-label front end for the GAS Agent platform with **six complete interface
 | Glass | Glassmorphism: frosted panels over a drifting aurora | `index.html#glass` |
 | Clay | Claymorphism: soft 3D controls, pastel color-coded tools | `index.html#clay` |
 | Cyber | Cybersecurity console: HUD panels, live status bar, secure boot | `index.html#cyber` |
-| Nebula | AI purple: deep violet, gradient edges, glowing core, starfield | `index.html#nebula` |
-| Gold | Premium: warm black, gold foil, serif display, hairline frames | `index.html#gold` |
-| Matte | Matte black and graphite with white and light-grey type | `index.html#matte` |
+| Nebula | AI purple with an interactive neural core: click to pulse, drag to spin, morph between Reason / Create / Analyze / Remember; it listens while you type | `index.html#nebula` |
+| Gold | Premium: black lacquer, art-deco sunburst, double gold frames with corner ornaments, brushed-gold controls, drifting gold dust | `index.html#gold` |
+| Matte | Soft black clay: raised matte-black panels with soft shadows, recessed wells, pearl-white controls, white and light-grey type | `index.html#matte` |
 
 Open `index.html` in a browser (no build step) to see the studio launcher and pick a skin.
 

@@ -20,7 +20,7 @@
     cyber: { name: 'Cyber', label: 'Cybersecurity' },
     nebula: { name: 'Nebula', label: 'AI purple' },
     gold: { name: 'Gold', label: 'Premium' },
-    matte: { name: 'Matte', label: 'Matte black' },
+    matte: { name: 'Matte', label: 'Soft black clay' },
   };
   const DEFAULT_BRAND = { name: 'GAS Agent', tagline: 'Assistant' };
 
@@ -461,6 +461,248 @@
     if ($('#lightbox').hidden) openModal('lightbox');
   }
 
+  /* ---------------- Nebula: interactive neural core ----------------
+     343 neurons morph between four shapes (Reason = sphere, Create = double
+     helix, Analyze = lattice cube, Remember = torus). Links form between
+     nearby neurons; signals travel along links. Click to pulse, drag to spin,
+     hover to light neurons, type in the composer to make it "listen". */
+  const Core = (() => {
+    const TAU = Math.PI * 2, N = 343;
+    const MODES = {
+      reason: { label: 'Reasoning', link: .25, thought: 'I break a problem into steps, weigh the options and explain my thinking.', prompt: "Draft a one-page summary of a topic I'm working on and save it as a Word document." },
+      create: { label: 'Creating', link: .27, thought: 'I turn a prompt into images and short videos you can view and download.', prompt: 'Generate an image of a futuristic city at sunset.' },
+      analyze: { label: 'Analyzing', link: .27, thought: 'I organise numbers into tables, trackers and clear summaries.', prompt: 'Build a simple Excel tracker for my top priorities this quarter.' },
+      remember: { label: 'Remembering', link: .3, thought: 'I read the files in your workspace and keep context across chats.', prompt: "Look at the files in my workspace folder and tell me what's there." },
+    };
+    const INSIGHTS = [
+      (l, ms) => `Pulse sent across ${l.toLocaleString()} links in ${ms} ms.`,
+      () => 'Signal received. Re-ranking what I know about your workspace.',
+      () => 'Pattern found: three of your recent requests were about planning.',
+      (l) => `${Math.round(l / 3.1).toLocaleString()} pathways lit. Context window refreshed.`,
+      () => 'Thinking in parallel: summarising, checking facts, drafting.',
+    ];
+    const shapes = {};
+    const P = new Float32Array(N * 3), V = new Float32Array(N * 3);
+    const SX = new Float32Array(N), SY = new Float32Array(N), SZ = new Float32Array(N), SS = new Float32Array(N);
+    let cv, ctx, W = 0, H = 0, dpr = 1, mode = 'reason', thr = .25;
+    let ry = 0, rx = -.32, vy = .0042, tilt = 0, pointer = null, drag = null, energy = .25, listenT = 0, insightI = 0;
+    let pulses = [], waves = [], links = new Int16Array(0), linkCount = 0, frameN = 0, started = false;
+
+    function build() {
+      const sp = [], hx = [], cu = [], to = [];
+      for (let i = 0; i < N; i++) { const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), th = i * 2.399963; sp.push(Math.cos(th) * r, y, Math.sin(th) * r); }
+      const M = Math.ceil(N / 3);
+      for (let i = 0; i < N; i++) {
+        const k = Math.floor(i / 3), t = k / M, a = t * Math.PI * 5.2, y = (t * 2 - 1) * 1.15;
+        const A = [Math.cos(a) * .58, y, Math.sin(a) * .58], B = [Math.cos(a + Math.PI) * .58, y, Math.sin(a + Math.PI) * .58];
+        const kind = i % 3;
+        if (kind === 0) hx.push(...A); else if (kind === 1) hx.push(...B);
+        else { const f = (k % 4 === 0) ? ((i * .618) % 1) : -1; if (f >= 0) hx.push(A[0] + (B[0] - A[0]) * f, y, A[2] + (B[2] - A[2]) * f); else hx.push(A[0] * .92, y + .02, A[2] * .92); }
+      }
+      for (let x = 0; x < 7; x++) for (let y = 0; y < 7; y++) for (let z = 0; z < 7; z++) cu.push((x / 6 * 2 - 1) * .74, (y / 6 * 2 - 1) * .74, (z / 6 * 2 - 1) * .74);
+      for (let i = 0; i < N; i++) { const u = (i % 49) / 49 * TAU, v = Math.floor(i / 49) / 7 * TAU, R = .76, r = .3; to.push((R + r * Math.cos(v)) * Math.cos(u), r * Math.sin(v), (R + r * Math.cos(v)) * Math.sin(u)); }
+      shapes.reason = Float32Array.from(sp); shapes.create = Float32Array.from(hx); shapes.analyze = Float32Array.from(cu); shapes.remember = Float32Array.from(to);
+      P.set(shapes.reason);
+      for (let i = 0; i < N * 3; i++) P[i] *= .02;
+    }
+    const active = () => cv && document.body.dataset.skin === 'nebula' && !document.hidden && cv.offsetParent !== null;
+
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+      if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; }
+    }
+    function setText(id, t) { const el = document.getElementById(id); if (el && el.textContent !== t) el.textContent = t; }
+
+    function pulseAt(px, py, strength = 1) {
+      energy = Math.min(1.4, energy + .9 * strength);
+      waves.push({ x: px, y: py, r: 0, a: .9 });
+      for (let i = 0; i < N; i++) {
+        const k = (.18 + Math.random() * .22) * strength;
+        V[i * 3] += P[i * 3] * k; V[i * 3 + 1] += P[i * 3 + 1] * k; V[i * 3 + 2] += P[i * 3 + 2] * k;
+      }
+      const near = []; for (let i = 0; i < N; i++) near.push([Math.hypot(SX[i] - px, SY[i] - py), i]);
+      near.sort((a, b) => a[0] - b[0]);
+      for (let n = 0; n < 26 && linkCount; n++) spawnFrom(near[n % 8][1]);
+    }
+    function spawnFrom(node) {
+      for (let tries = 0; tries < 30; tries++) {
+        const l = Math.floor(Math.random() * linkCount), a = links[l * 2], b = links[l * 2 + 1];
+        if (node == null || a === node || b === node) { pulses.push({ a: node === b ? b : a, b: node === b ? a : b, t: 0, s: .025 + Math.random() * .035, hops: 3 + Math.floor(Math.random() * 4) }); return; }
+      }
+      const l = Math.floor(Math.random() * linkCount); pulses.push({ a: links[l * 2], b: links[l * 2 + 1], t: 0, s: .03, hops: 2 });
+    }
+    function nextFrom(node, prev) {
+      const cand = [];
+      for (let l = 0; l < linkCount && cand.length < 8; l++) {
+        const a = links[l * 2], b = links[l * 2 + 1];
+        if (a === node && b !== prev) cand.push(b); else if (b === node && a !== prev) cand.push(a);
+      }
+      return cand.length ? cand[Math.floor(Math.random() * cand.length)] : -1;
+    }
+
+    function frame() {
+      requestAnimationFrame(frame);
+      if (!active()) return;
+      resize(); frameN++;
+      const T = shapes[mode];
+      const ease = .065;
+      for (let i = 0; i < N * 3; i++) { P[i] += (T[i] - P[i]) * ease + V[i]; V[i] *= .86; }
+      thr += (MODES[mode].link - thr) * .05;
+      if (!drag) { const base = reduced ? 0 : .0042 + energy * .01; vy += (base - vy) * .03; }
+      ry += vy;
+      rx += ((-.32 + tilt) - rx) * .04;
+      energy *= .985; if (listenT > 0) listenT--;
+
+      const cx = W / 2, cy = H / 2 + 4 * dpr, R = Math.min(W, H) * .36;
+      const cyR = Math.cos(ry), syR = Math.sin(ry), cxR = Math.cos(rx), sxR = Math.sin(rx);
+      for (let i = 0; i < N; i++) {
+        const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+        const x1 = x * cyR - z * syR, z1 = x * syR + z * cyR;
+        const y2 = y * cxR - z1 * sxR, z2 = y * sxR + z1 * cxR;
+        const s = 2.8 / (2.8 + z2);
+        SX[i] = cx + x1 * R * s; SY[i] = cy + y2 * R * s; SZ[i] = z2; SS[i] = s;
+      }
+      // links
+      const t2 = thr * thr; let lc = 0;
+      if (links.length < 6000 * 2) links = new Int16Array(6000 * 2);
+      for (let i = 0; i < N && lc < 6000; i++) {
+        const xi = P[i * 3], yi = P[i * 3 + 1], zi = P[i * 3 + 2];
+        for (let j = i + 1; j < N; j++) {
+          const dx = P[j * 3] - xi; if (dx > thr || dx < -thr) continue;
+          const dy = P[j * 3 + 1] - yi, dz = P[j * 3 + 2] - zi;
+          if (dx * dx + dy * dy + dz * dz < t2) { links[lc * 2] = i; links[lc * 2 + 1] = j; lc++; if (lc >= 6000) break; }
+        }
+      }
+      linkCount = lc;
+
+      ctx.clearRect(0, 0, W, H);
+      // core glow
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.5);
+      g.addColorStop(0, `rgba(192,38,211,${.18 + energy * .2})`); g.addColorStop(.45, `rgba(124,58,237,${.08 + energy * .08})`); g.addColorStop(1, 'rgba(124,58,237,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+      // links in 3 depth buckets
+      const cols = ['124,58,237', '168,85,247', '240,171,252'];
+      for (let bkt = 0; bkt < 3; bkt++) {
+        ctx.beginPath();
+        for (let l = 0; l < lc; l++) {
+          const a = links[l * 2], b = links[l * 2 + 1]; const z = (SZ[a] + SZ[b]) / 2;
+          const k = z > .35 ? 0 : z > -.35 ? 1 : 2; if (k !== bkt) continue;
+          ctx.moveTo(SX[a], SY[a]); ctx.lineTo(SX[b], SY[b]);
+        }
+        ctx.strokeStyle = `rgba(${cols[bkt]},${[.16, .26, .42][bkt] + energy * .25})`;
+        ctx.lineWidth = [.6, .8, 1.1][bkt] * dpr; ctx.stroke();
+      }
+      // neurons
+      ctx.globalCompositeOperation = 'lighter';
+      const pr = pointer ? 80 * dpr : 0;
+      for (let i = 0; i < N; i++) {
+        let r = (.8 + SS[i] * 1.3) * dpr, a = .35 + (1 - (SZ[i] + 1) / 2) * .6;
+        if (pointer) { const d = Math.hypot(SX[i] - pointer.x, SY[i] - pointer.y); if (d < pr) { const k = 1 - d / pr; r += k * 3 * dpr; a = Math.min(1, a + k); ctx.fillStyle = `rgba(240,171,252,${k * .25})`; ctx.beginPath(); ctx.arc(SX[i], SY[i], r * 3, 0, TAU); ctx.fill(); } }
+        ctx.fillStyle = SZ[i] < -.3 ? `rgba(250,232,255,${a})` : SZ[i] < .3 ? `rgba(216,180,254,${a})` : `rgba(139,92,246,${a})`;
+        ctx.beginPath(); ctx.arc(SX[i], SY[i], r, 0, TAU); ctx.fill();
+      }
+      // signals
+      const want = (reduced ? 2 : 10) + Math.round(energy * 40) + (listenT > 0 ? 18 : 0);
+      while (pulses.length < want && lc) spawnFrom(null);
+      const keep = [];
+      for (const p of pulses) {
+        p.t += p.s * (1 + energy);
+        if (p.t >= 1) { if (p.hops > 0) { const n = nextFrom(p.b, p.a); if (n >= 0) { keep.push({ a: p.b, b: n, t: 0, s: p.s, hops: p.hops - 1 }); } } continue; }
+        const x = SX[p.a] + (SX[p.b] - SX[p.a]) * p.t, y = SY[p.a] + (SY[p.b] - SY[p.a]) * p.t;
+        const rg = ctx.createRadialGradient(x, y, 0, x, y, 7 * dpr);
+        rg.addColorStop(0, 'rgba(255,255,255,.95)'); rg.addColorStop(.3, 'rgba(244,114,182,.7)'); rg.addColorStop(1, 'rgba(244,114,182,0)');
+        ctx.fillStyle = rg; ctx.fillRect(x - 7 * dpr, y - 7 * dpr, 14 * dpr, 14 * dpr);
+        keep.push(p);
+      }
+      pulses = keep.slice(0, 160);
+      ctx.globalCompositeOperation = 'source-over';
+      // shockwaves
+      waves = waves.filter((w) => w.a > .02);
+      for (const w of waves) {
+        w.r += 7 * dpr; w.a *= .94;
+        ctx.strokeStyle = `rgba(240,171,252,${w.a})`; ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath(); ctx.arc(w.x, w.y, w.r, 0, TAU); ctx.stroke();
+      }
+      if (frameN % 12 === 0) {
+        setText('coreStats', `${N} neurons · ${lc.toLocaleString()} links · ${pulses.length} signals`);
+        setText('coreState', listenT > 0 ? 'Listening' : MODES[mode].label);
+      }
+    }
+
+    function setMode(m) {
+      if (!MODES[m]) return;
+      mode = m; energy = Math.min(1.4, energy + .5);
+      waves.push({ x: W / 2, y: H / 2, r: 0, a: .7 });
+      $$('.core-mode').forEach((b) => b.classList.toggle('active', b.dataset.core === m));
+      setText('coreThought', MODES[m].thought);
+      setText('coreState', MODES[m].label);
+    }
+    function think() {
+      const ms = 18 + Math.floor(Math.random() * 30);
+      setText('coreThought', INSIGHTS[insightI++ % INSIGHTS.length](linkCount, ms));
+    }
+    function init() {
+      if (started) return; started = true;
+      cv = $('#coreCanvas'); if (!cv) return;
+      ctx = cv.getContext('2d'); build();
+      const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * dpr, y: (e.clientY - r.top) * dpr }; };
+      cv.addEventListener('pointermove', (e) => {
+        pointer = pos(e);
+        const r = cv.getBoundingClientRect(); tilt = ((e.clientY - r.top) / r.height - .5) * .5;
+        if (drag) {
+          const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+          if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+          ry += (e.clientX - drag.lx) * .01; tilt += (e.clientY - drag.ly) * .004; vy = (e.clientX - drag.lx) * .002;
+          drag.lx = e.clientX; drag.ly = e.clientY;
+        }
+      });
+      cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false }; try { cv.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+      cv.addEventListener('pointerup', (e) => {
+        if (drag && !drag.moved) { const p = pos(e); pulseAt(p.x, p.y); think(); }
+        drag = null; $('#coreHint').style.opacity = '0';
+      });
+      cv.addEventListener('pointerleave', () => { pointer = null; tilt = 0; });
+      cv.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pulseAt(W / 2, H / 2); think(); } });
+      $$('.core-mode').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.core)));
+      $('#coreTry').addEventListener('click', () => send(MODES[mode].prompt));
+      requestAnimationFrame(frame);
+    }
+    function listen() { if (!started) return; listenT = 50; energy = Math.min(1.2, energy + .05); }
+    return { init, listen };
+  })();
+
+  /* ---------------- Gold: drifting gold dust ---------------- */
+  const Dust = (() => {
+    let cv, ctx, W = 0, H = 0, dpr = 1, parts = [], started = false, t = 0;
+    function init() {
+      if (started) return; started = true;
+      cv = $('#goldDust'); if (!cv) return; ctx = cv.getContext('2d');
+      for (let i = 0; i < 80; i++) parts.push({ x: Math.random(), y: Math.random(), r: .4 + Math.random() * 1.7, vy: .00012 + Math.random() * .0005, vx: (Math.random() - .5) * .00012, tw: Math.random() * 6.28, a: .25 + Math.random() * .6 });
+      requestAnimationFrame(frame);
+    }
+    function frame() {
+      requestAnimationFrame(frame);
+      if (document.body.dataset.skin !== 'gold' || document.hidden) return;
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+      if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; }
+      t += .016; ctx.clearRect(0, 0, W, H);
+      for (const p of parts) {
+        if (!reduced) { p.y -= p.vy; p.x += p.vx + Math.sin(t + p.tw) * .00008; }
+        if (p.y < -.02) { p.y = 1.02; p.x = Math.random(); }
+        const x = p.x * W, y = p.y * H, a = p.a * (.45 + .55 * Math.sin(t * 1.6 + p.tw)), r = p.r * dpr;
+        ctx.fillStyle = `rgba(244,214,128,${a})`; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+        if (p.r > 1.6 && a > .5) {
+          ctx.strokeStyle = `rgba(255,240,200,${(a - .5) * 1.4})`; ctx.lineWidth = .7 * dpr;
+          ctx.beginPath(); ctx.moveTo(x - r * 4, y); ctx.lineTo(x + r * 4, y); ctx.moveTo(x, y - r * 4); ctx.lineTo(x, y + r * 4); ctx.stroke();
+        }
+      }
+    }
+    return { init };
+  })();
+
   /* ---------------- Greeting ---------------- */
   function greeting() {
     const h = new Date().getHours();
@@ -503,6 +745,8 @@
     $('#skinSw').className = 'sw sw-' + id;
     $('#skinName').textContent = SKINS[id].name;
     if (changed) log(`Switched to ${SKINS[id].name} interface`);
+    if (id === 'nebula') Core.init();
+    if (id === 'gold') Dust.init();
     if (id === 'cyber') { startClock(); if (!bootedCyber) { bootedCyber = true; boot(); } } else stopClock();
   }
 
@@ -1218,7 +1462,7 @@
     });
 
     $('#composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
-    $('#prompt').addEventListener('input', autosize);
+    $('#prompt').addEventListener('input', () => { autosize(); Core.listen(); });
     $('#prompt').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
     });
