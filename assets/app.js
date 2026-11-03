@@ -20,7 +20,7 @@
     cyber: { name: 'Cyber', label: 'Cybersecurity' },
     nebula: { name: 'Nebula', label: 'AI purple' },
     gold: { name: 'Gold', label: 'Premium' },
-    matte: { name: 'Matte', label: 'Soft black clay' },
+    matte: { name: 'Matte', label: 'Matte black · Red' },
   };
   const DEFAULT_BRAND = { name: 'GAS Agent', tagline: 'Assistant' };
 
@@ -703,6 +703,61 @@
     return { init };
   })();
 
+  /* ---------------- Matte: slow red light trails ----------------
+     Thin ribbons drift across the lower part of the screen; a red light
+     travels along each one with a fading tail, like long-exposure tail-lights. */
+  const Trails = (() => {
+    const TAU = Math.PI * 2;
+    let cv, ctx, W = 0, H = 0, dpr = 1, started = false, t0 = 0;
+    const R = [];
+    function init() {
+      if (started) return; started = true;
+      cv = $('#matteTrails'); if (!cv) return; ctx = cv.getContext('2d');
+      for (let i = 0; i < 7; i++) {
+        const low = true;
+        R.push({ by: low ? .62 + i * .05 : .12 + (i - 7) * .08, a1: 18 + Math.random() * 34, f1: .6 + Math.random() * .9, p1: Math.random() * TAU, s1: .05 + Math.random() * .08,
+          a2: 6 + Math.random() * 14, f2: 1.6 + Math.random() * 1.6, p2: Math.random() * TAU, s2: .04 + Math.random() * .06,
+          alpha: low ? .07 + Math.random() * .09 : .04, speed: .055 + Math.random() * .06, off: Math.random(), w: low ? 1 : .8 });
+      }
+      t0 = performance.now(); requestAnimationFrame(frame);
+    }
+    const yAt = (r, x, t) => r.by * H + (r.a1 * Math.sin(x / W * r.f1 * TAU + r.p1 + t * r.s1 * TAU) + r.a2 * Math.sin(x / W * r.f2 * TAU + r.p2 - t * r.s2 * TAU)) * dpr;
+    function frame(now) {
+      requestAnimationFrame(frame);
+      if (document.body.dataset.skin !== 'matte' || document.hidden) return;
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+      if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; }
+      const t = reduced ? 0 : (now - t0) / 1000;
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter';
+      const step = 8 * dpr;
+      for (const r of R) {
+        const fade = ctx.createLinearGradient(0, 0, W, 0);
+        fade.addColorStop(0, 'rgba(225,29,46,0)'); fade.addColorStop(.25, `rgba(225,29,46,${r.alpha})`); fade.addColorStop(.75, `rgba(225,29,46,${r.alpha})`); fade.addColorStop(1, 'rgba(225,29,46,0)');
+        ctx.strokeStyle = fade; ctx.lineWidth = r.w * dpr; ctx.beginPath();
+        for (let x = 0; x <= W; x += step) { const y = yAt(r, x, t); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+        ctx.stroke();
+        if (reduced) continue;
+        const u = ((t * r.speed + r.off) % 1.35) - .2, tail = .22;
+        const x1 = u * W, x0 = (u - tail) * W;
+        const g = ctx.createLinearGradient(x0, 0, x1, 0);
+        g.addColorStop(0, 'rgba(255,52,69,0)'); g.addColorStop(1, `rgba(255,70,85,${Math.min(.85, r.alpha * 6)})`);
+        ctx.strokeStyle = g; ctx.lineWidth = (r.w + .8) * dpr; ctx.beginPath();
+        for (let x = Math.max(0, x0); x <= Math.min(W, x1); x += step / 2) { const y = yAt(r, x, t); x === Math.max(0, x0) ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+        ctx.stroke();
+        if (x1 > 0 && x1 < W) {
+          const y = yAt(r, x1, t), rad = 14 * dpr;
+          const hg = ctx.createRadialGradient(x1, y, 0, x1, y, rad);
+          hg.addColorStop(0, `rgba(255,220,224,${Math.min(.9, r.alpha * 7)})`); hg.addColorStop(.25, 'rgba(255,52,69,.45)'); hg.addColorStop(1, 'rgba(255,52,69,0)');
+          ctx.fillStyle = hg; ctx.fillRect(x1 - rad, y - rad, rad * 2, rad * 2);
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    return { init };
+  })();
+
   /* ---------------- Greeting ---------------- */
   function greeting() {
     const h = new Date().getHours();
@@ -747,6 +802,7 @@
     if (changed) log(`Switched to ${SKINS[id].name} interface`);
     if (id === 'nebula') Core.init();
     if (id === 'gold') Dust.init();
+    if (id === 'matte') Trails.init();
     if (id === 'cyber') { startClock(); if (!bootedCyber) { bootedCyber = true; boot(); } } else stopClock();
   }
 
