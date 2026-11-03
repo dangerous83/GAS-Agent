@@ -34,6 +34,7 @@ Every push then deploys automatically: the production branch goes to your main U
 `vercel.json` turns on clean URLs and adds basic security headers. It allows the microphone for the voice-input button.
 
 ## What works in every skin
+- Conversation menu (⋯ on hover, or right-click a chat): Pin to the top, Move to project (existing or new), Archive (with an Archived view to restore), Delete (with confirmation); Archive and Delete can be undone
 - Sidebar: New chat, searchable Recents, Code, Projects, Artifacts, Scheduled, Team room, Agents, Open local folder, Guide & tour, Settings
 - **Home** button and interface menu in every skin to go back to the studio or switch skins
 - **Image and video generation (test mode, no API):** 4 image variations with full-size viewer and PNG download; 6-second looping video with play/pause, scrubbing and WebM export. Scenes are painted on canvas from the prompt (city, ocean, mountains, space, forest, abstract) and saved to Artifacts

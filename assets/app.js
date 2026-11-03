@@ -71,6 +71,7 @@
   const save = () => {
     store.set('convos', state.convos.slice(0, 40));
     store.set('artifacts_v2', state.artifacts.slice(0, 40));
+    if (state.projects) store.set('projects', state.projects.map(({ id, ico, c, title, text, foot }) => ({ id, ico, c, title, text, foot })));
   };
 
   /* ---------------- Logo ---------------- */
@@ -103,12 +104,17 @@
   }
 
   /* ---------------- Toasts & log ---------------- */
-  function toast(msg, ico = 'check') {
+  function toast(msg, ico = 'check', action) {
     const t = document.createElement('div');
-    t.className = 'toast';
+    if (action) $$('#toasts .toast.has-act').forEach((old) => old.remove());
+    t.className = 'toast' + (action ? ' has-act' : '');
     t.innerHTML = `${icon(ico)}<span>${esc(msg)}</span>`;
+    if (action) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label;
+      b.onclick = () => { action.run(); t.remove(); }; t.append(b);
+    }
     $('#toasts').append(t);
-    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 260); }, 2600);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 260); }, action ? 5000 : 2600);
   }
   function log(msg) {
     const d = new Date();
@@ -813,14 +819,84 @@
     const d = Math.round(s / 86400);
     return d === 1 ? 'yesterday' : `${d} days ago`;
   }
+  const projectById = (id) => (state.projects || []).find((p) => p.id === id);
+  function recentRow(c) {
+    const proj = c.projectId && projectById(c.projectId);
+    const active = c.id === state.current && state.section === 'chat';
+    return `<div class="recent-row${active ? ' active' : ''}" data-row="${c.id}">
+      <button class="recent${active ? ' active' : ''}" data-convo="${c.id}"><b>${c.pinned ? icon('pin', 'pin-ico') : ''}${esc(c.title)}</b><small>${relTime(c.updated)}${proj ? ` · ${esc(proj.title)}` : ''}</small></button>
+      <button class="recent-more" data-convo-menu="${c.id}" aria-label="Options for ${esc(c.title)}" aria-haspopup="menu" title="Pin, move, archive or delete">${icon('more')}</button>
+    </div>`;
+  }
   function renderRecents() {
     const q = $('#recentSearch').value.trim().toLowerCase();
-    const list = state.convos.slice().sort((a, b) => b.updated - a.updated)
-      .filter((c) => !q || c.title.toLowerCase().includes(q) || c.messages.some((m) => (m.text || '').toLowerCase().includes(q)));
-    $('#recents').innerHTML = list.length
-      ? list.map((c) => `<button class="recent${c.id === state.current && state.section === 'chat' ? ' active' : ''}" data-convo="${c.id}"><b>${esc(c.title)}</b><small>${relTime(c.updated)}</small></button>`).join('')
-      : `<p class="recents-empty">${q ? 'No chats match that search.' : 'Your chats will show up here.'}</p>`;
+    const match = (c) => !q || c.title.toLowerCase().includes(q) || c.messages.some((m) => (m.text || '').toLowerCase().includes(q));
+    const sorted = state.convos.slice().sort((a, b) => b.updated - a.updated);
+    const archivedCount = sorted.filter((c) => c.archived).length;
+    if (state.showArchived && !archivedCount) state.showArchived = false;
+    let html = '';
+    if (state.showArchived) {
+      const list = sorted.filter((c) => c.archived && match(c));
+      html = `<button class="recents-back" data-action="hide-archived">${icon('left')}<span>Archived chats</span><small>${archivedCount}</small></button>`
+        + (list.length ? list.map(recentRow).join('') : '<p class="recents-empty">No archived chats match that search.</p>');
+    } else {
+      const live = sorted.filter((c) => !c.archived && match(c));
+      const pinned = live.filter((c) => c.pinned), rest = live.filter((c) => !c.pinned);
+      if (pinned.length) html += `<p class="recents-group">${icon('pin')}Pinned</p>` + pinned.map(recentRow).join('');
+      if (pinned.length && rest.length) html += '<p class="recents-group">Recent</p>';
+      html += rest.map(recentRow).join('');
+      if (!live.length) html = `<p class="recents-empty">${q ? 'No chats match that search.' : 'Your chats will show up here.'}</p>`;
+      if (archivedCount) html += `<button class="recents-archived" data-action="show-archived">${icon('archive')}<span>Archived</span><small>${archivedCount}</small></button>`;
+    }
+    $('#recents').innerHTML = html;
     $('#artifactCount').textContent = state.artifacts.length || '';
+  }
+
+  /* Conversation actions: pin, move to project, archive, delete */
+  const convo = (id) => state.convos.find((c) => c.id === id);
+  function afterConvoChange() { save(); renderRecents(); if (state.section === 'projects') renderSection('projects'); }
+  function leaveIfOpen(id) { if (state.current === id) newChat(); }
+  function convoMenu(btn) {
+    const c = convo(btn.dataset.convoMenu); if (!c) return;
+    const proj = c.projectId && projectById(c.projectId);
+    const main = () => c.archived
+      ? `<p class="pop-title">${esc(c.title)}</p>
+         <button class="pop-item" data-pick="unarchive">${icon('archive')}<span><b>Unarchive</b><small>Move back to Recents</small></span></button>
+         <div class="pop-sep"></div>
+         <button class="pop-item danger" data-pick="delete">${icon('trash')}<span><b>Delete</b><small>Remove this chat for good</small></span></button>`
+      : `<p class="pop-title">${esc(c.title)}</p>
+         <button class="pop-item" data-pick="pin">${icon('pin')}<span><b>${c.pinned ? 'Unpin' : 'Pin'}</b><small>${c.pinned ? 'Return to the Recent list' : 'Keep it at the top of Recents'}</small></span></button>
+         <button class="pop-item" data-pick="move">${icon('move')}<span><b>Move to project</b><small>${proj ? `In ${esc(proj.title)}` : 'Group it with related work'}</small></span>${icon('right', 'chk')}</button>
+         <button class="pop-item" data-pick="archive">${icon('archive')}<span><b>Archive</b><small>Hide from Recents, keep the history</small></span></button>
+         <div class="pop-sep"></div>
+         <button class="pop-item danger" data-pick="delete">${icon('trash')}<span><b>Delete</b><small>Remove this chat for good</small></span></button>`;
+    const moveHTML = () => `<button class="pop-item pop-back" data-pick="back">${icon('left')}<span><b>Move to project</b></span></button><div class="pop-sep"></div>`
+      + state.projects.map((p) => `<button class="pop-item" data-pick="to:${p.id}">${icon('folder')}<span><b>${esc(p.title)}</b></span>${c.projectId === p.id ? icon('check', 'chk') : ''}</button>`).join('')
+      + `<button class="pop-item" data-pick="newproj">${icon('plus')}<span><b>New project</b><small>Create one and move this chat into it</small></span></button>`
+      + (c.projectId ? `<div class="pop-sep"></div><button class="pop-item" data-pick="noproj">${icon('x')}<span><b>Remove from project</b></span></button>` : '');
+    const confirmHTML = () => `<div class="pop-confirm"><b>Delete “${esc(c.title)}”?</b><small>The chat and its messages are removed from this browser. This can't be undone.</small>
+      <div class="pop-confirm-actions"><button class="btn-ghost" data-pick="cancel">Cancel</button><button class="btn-danger" data-pick="confirm-delete">${icon('trash')}Delete</button></div></div>`;
+    const pop = $('#popover');
+    const swap = (html) => { pop.innerHTML = html; const f = $('[data-pick]', pop); f && f.focus(); return 'keep'; };
+    popover(btn, main(), (v) => {
+      if (v === 'cancel') return undefined;
+      if (v === 'back') return swap(main());
+      if (v === 'move') return swap(moveHTML());
+      if (v === 'delete') return swap(confirmHTML());
+      if (v === 'pin') { c.pinned = !c.pinned; toast(c.pinned ? 'Chat pinned' : 'Chat unpinned', 'pin'); log(`${c.pinned ? 'Pinned' : 'Unpinned'} "${c.title}"`); }
+      else if (v.startsWith('to:')) { const p = projectById(v.slice(3)); c.projectId = p.id; toast(`Moved to ${p.title}`, 'move'); log(`Moved "${c.title}" to ${p.title}`); }
+      else if (v === 'newproj') { const p = addProject(true); c.projectId = p.id; toast(`Moved to ${p.title}`, 'move'); log(`Moved "${c.title}" to new project ${p.title}`); }
+      else if (v === 'noproj') { c.projectId = null; toast('Removed from project', 'move'); }
+      else if (v === 'archive') {
+        c.archived = true; c.pinned = false; leaveIfOpen(c.id); log(`Archived "${c.title}"`);
+        toast('Chat archived', 'archive', { label: 'Undo', run: () => { c.archived = false; afterConvoChange(); } });
+      } else if (v === 'unarchive') { c.archived = false; toast('Chat restored to Recents', 'archive'); log(`Unarchived "${c.title}"`); }
+      else if (v === 'confirm-delete') {
+        const idx = state.convos.indexOf(c); state.convos.splice(idx, 1); leaveIfOpen(c.id); log(`Deleted "${c.title}"`);
+        toast('Chat deleted', 'trash', { label: 'Undo', run: () => { state.convos.splice(idx, 0, c); afterConvoChange(); } });
+      }
+      afterConvoChange();
+    });
   }
 
   const SECTIONS = {
@@ -833,7 +909,10 @@
         { ico: 'code', c: 'c3', title: 'marketing-site', text: 'Astro · 61 files · branch redesign', foot: 'Edited 4 days ago', pill: ['idle', 'Idle'] },
       ]) },
     projects: { title: 'Projects', sub: 'Workspace · Projects', icon: 'folder', desc: 'Group chats, files and instructions so the agent keeps context for a piece of work.', action: 'New project', run: () => addProject(),
-      items: () => state.projects },
+      items: () => state.projects.map((p) => {
+        const chats = state.convos.filter((c) => c.projectId === p.id && !c.archived);
+        return Object.assign({}, p, chats.length ? { text: `${p.text} · moved here: ${chats.map((c) => c.title).slice(0, 3).join(', ')}${chats.length > 3 ? '…' : ''}`, pill: ['on', `${chats.length} chat${chats.length > 1 ? 's' : ''}`] } : {});
+      }) },
     artifacts: { title: 'Artifacts', sub: 'Workspace · Artifacts', icon: 'grid', desc: 'Documents, spreadsheets, PDFs and images the agent has created. New files from chat appear here.', action: 'Create in chat', run: () => newChat(),
       items: () => state.artifacts.map((a) => ({ ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image', webm: 'video' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3', webm: 'c4' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name, media: a.media })) },
     scheduled: { title: 'Scheduled', sub: 'Workspace · Scheduled', icon: 'clock', desc: 'Tasks the agent runs on a timetable, like a morning inbox digest or a Friday report.', action: 'New schedule', run: () => addSchedule(),
@@ -847,10 +926,10 @@
     agents: { title: 'Agents', sub: 'Workspace · Agents', icon: 'radio', desc: 'Specialised agents with their own instructions and tools. Turn them on to make them available in chat.', action: 'New agent', run: () => addAgent(),
       items: () => state.agents },
   };
-  state.projects = [
-    { ico: 'folder', c: 'c3', title: 'Q4 planning', text: '12 chats · 8 files · goals, budget and hiring', foot: 'Updated today' },
-    { ico: 'folder', c: 'c1', title: 'Client onboarding', text: '5 chats · 14 files · templates and checklists', foot: 'Updated 2 days ago' },
-    { ico: 'folder', c: 'c2', title: 'Research notes', text: '9 chats · 22 files · market and competitor notes', foot: 'Updated last week' },
+  state.projects = store.get('projects', null) || [
+    { id: 'p-q4', ico: 'folder', c: 'c3', title: 'Q4 planning', text: '12 chats · 8 files · goals, budget and hiring', foot: 'Updated today' },
+    { id: 'p-onboard', ico: 'folder', c: 'c1', title: 'Client onboarding', text: '5 chats · 14 files · templates and checklists', foot: 'Updated 2 days ago' },
+    { id: 'p-research', ico: 'folder', c: 'c2', title: 'Research notes', text: '9 chats · 22 files · market and competitor notes', foot: 'Updated last week' },
   ];
   state.schedules = [
     { ico: 'clock', c: 'c2', title: 'Morning inbox digest', text: 'Weekdays at 08:00 · summarises unread mail', foot: 'Next run tomorrow 08:00', toggle: true, on: true },
@@ -921,10 +1000,12 @@
     }));
   }
 
-  function addProject() {
+  function addProject(silent) {
     const n = state.projects.length + 1;
-    state.projects.unshift({ ico: 'folder', c: ['c1', 'c2', 'c3', 'c4'][n % 4], title: `New project ${n}`, text: '0 chats · 0 files · add instructions to start', foot: 'Created just now' });
-    renderSection('projects'); toast('Project created'); log(`Created project "New project ${n}"`);
+    const p = { id: 'p-' + now().toString(36), ico: 'folder', c: ['c1', 'c2', 'c3', 'c4'][n % 4], title: `New project ${n}`, text: 'Add instructions and files to start', foot: 'Created just now' };
+    state.projects.unshift(p); save();
+    if (!silent) { renderSection('projects'); toast('Project created'); log(`Created project "${p.title}"`); }
+    return p;
   }
   function addSchedule() {
     state.schedules.unshift({ ico: 'clock', c: 'c1', title: 'Daily priorities check-in', text: 'Weekdays at 09:30 · asks what matters today', foot: 'Next run tomorrow 09:30', toggle: true, on: true });
@@ -1234,9 +1315,10 @@
     let top = r.bottom + 8;
     if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 8);
     pop.style.left = left + 'px'; pop.style.top = top + 'px';
-    pop.onclick = (e) => { const b = e.target.closest('[data-pick]'); if (b) { onClick && onClick(b.dataset.pick); closePopover(); } };
+    pop.onclick = (e) => { const b = e.target.closest('[data-pick]'); if (b) { const keep = onClick && onClick(b.dataset.pick) === 'keep'; if (!keep) closePopover(); } };
+    anchor.setAttribute('aria-expanded', 'true');
   }
-  function closePopover() { const p = $('#popover'); p.hidden = true; p._anchor = null; }
+  function closePopover() { const p = $('#popover'); if (p._anchor) p._anchor.removeAttribute('aria-expanded'); p.hidden = true; p._anchor = null; }
 
   const MODES = [
     ['Normal', 'Chats and acts, asking before changing files'],
@@ -1298,7 +1380,7 @@
       ...Object.entries(SECTIONS).map(([k, s]) => ({ g: 'Go to', label: s.title, ico: s.icon, run: () => showSection(k) })),
       ...Object.entries(SKINS).map(([k, s]) => ({ g: 'Interface', label: `${s.name} interface`, ico: 'layers', hint: s.label, run: () => { location.hash = k; } })),
       { g: 'Interface', label: 'Back to studio', ico: 'home', run: () => { location.hash = ''; } },
-      ...state.convos.map((c) => ({ g: 'Chats', label: c.title, ico: 'search', hint: relTime(c.updated), run: () => openConvo(c.id) })),
+      ...state.convos.filter((c) => !c.archived).map((c) => ({ g: 'Chats', label: c.title, ico: 'search', hint: relTime(c.updated), run: () => openConvo(c.id) })),
     ];
     return cmds;
   }
@@ -1444,11 +1526,15 @@
     document.addEventListener('click', (e) => {
       const a = e.target.closest('[data-action]');
       const sec = e.target.closest('.nav [data-section]');
+      const cmenu = e.target.closest('[data-convo-menu]');
+      if (cmenu) { e.preventDefault(); convoMenu(cmenu); return; }
       const conv = e.target.closest('[data-convo]');
       const art = e.target.closest('[data-artifact]');
       const rm = e.target.closest('[data-rm]');
       const pal = e.target.closest('#palList [role=option]');
-      if (!e.target.closest('#popover') && !e.target.closest('[data-action$="-menu"], [data-action="notifications"]')) closePopover();
+      const inPopover = e.composedPath().includes($('#popover'));
+      if (!inPopover && !e.target.closest('[data-action$="-menu"], [data-action="notifications"], [data-convo-menu]')) closePopover();
+      if (inPopover) return;
       if (e.target.closest('.home-btn')) { closeNav(); }
       if (pal) { palRun(+pal.dataset.i); return; }
       if (rm) { state.attachments.splice(+rm.dataset.rm, 1); renderAttachments(); return; }
@@ -1460,6 +1546,8 @@
       const act = a.dataset.action;
       const map = {
         'new-chat': newChat,
+        'show-archived': () => { state.showArchived = true; renderRecents(); },
+        'hide-archived': () => { state.showArchived = false; renderRecents(); },
         'toggle-sidebar': toggleSidebar,
         'open-nav': openNav,
         'close-nav': closeNav,
@@ -1493,6 +1581,10 @@
     });
     $$('.suggest').forEach((b) => b.addEventListener('click', () => send(b.textContent.trim())));
     $('#recentSearch').addEventListener('input', renderRecents);
+    $('#recents').addEventListener('contextmenu', (e) => {
+      const row = e.target.closest('[data-row]'); if (!row) return;
+      e.preventDefault(); const btn = $('[data-convo-menu]', row); closePopover(); convoMenu(btn);
+    });
     $('#modelForm').addEventListener('submit', connectModel);
     $('#providers').addEventListener('click', (e) => {
       const b = e.target.closest('[data-prov]'); if (!b) return;
