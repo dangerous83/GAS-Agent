@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 72" width="600" height="144" role="img" aria-label="GAS Agent">
+  <defs><linearGradient id="g" x1="10" y1="8" x2="62" y2="66" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#3A6BFF"/><stop offset="1" stop-color="#18C7B8"/></linearGradient></defs>
+  <g transform="translate(4 4)">
+    <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#g)"/>
+    <path d="M42.6 21.4A15 15 0 1 0 47 34H33" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="33" cy="34" r="4" fill="#fff"/><circle cx="49.5" cy="14.5" r="3.3" fill="#fff"/>
+  </g>
+  <text x="84" y="46" font-family="'Bricolage Grotesque', 'Manrope', system-ui, sans-serif" font-size="34" font-weight="750" letter-spacing="-0.6" fill="#0E1116">GAS <tspan fill="#3A6BFF">Agent</tspan></text>
+</svg>
