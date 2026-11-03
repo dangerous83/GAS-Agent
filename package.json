@@ -1,0 +1,8 @@
+{
+  "name": "gas-agent",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GAS Agent white-label studio with a Vercel AI backend",
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
