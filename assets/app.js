@@ -347,13 +347,13 @@
       c.fillStyle = v; c.fillRect(0, 0, w, h);
       c.restore();
     }
-    function title(prompt) {
+    function title(prompt, max = 48) {
       let p = prompt.trim().replace(/^(please\s+)?(can you\s+|could you\s+)?(generate|create|make|draw|render|design|produce|paint|show)(\s+me)?\s+/i, '')
         .replace(/^(an?\s+|the\s+)?(\d+[- ]?(second|sec|s)\s+)?(hd\s+)?(image|picture|photo|illustration|video|clip|animation|poster|wallpaper|artwork|render)s?\s*(of|showing|with|about|for)?\s*/i, '')
         .replace(/[.!?]+$/, '').trim();
       if (!p) p = 'Untitled';
       p = p.charAt(0).toUpperCase() + p.slice(1);
-      return p.length > 48 ? p.slice(0, 46).trim() + '…' : p;
+      return p.length > max ? p.slice(0, max - 2).trim() + '…' : p;
     }
     return { draw, hash, title, scene };
   })();
@@ -371,12 +371,39 @@
     } catch { toast('Download was blocked by the browser.', 'x'); }
   }
 
+  const AI_MEDIA = /^https?:$/.test(location.protocol);
+  const aiImageURL = (prompt, seed, w, h) => `https://image.pollinations.ai/prompt/${encodeURIComponent(Gen.title(prompt, 400))}?width=${w}&height=${h}&seed=${seed % 2147483647}&nologo=true&model=flux`;
+  function kenBurns(ctx, W, H, img, t) {
+    const k = 0.5 - 0.5 * Math.cos(t * Math.PI * 2), s = 1.05 + 0.1 * k;
+    const iw = W * s, ih = H * s, ox = Math.sin(t * Math.PI * 2) * W * 0.025, oy = (k - 0.5) * H * 0.03;
+    ctx.drawImage(img, (W - iw) / 2 + ox, (H - ih) / 2 + oy, iw, ih);
+    const g = ctx.createLinearGradient(W * (t * 1.6 - 0.5), 0, W * (t * 1.6 - 0.1), H);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.06)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.35)'); ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  }
+  async function downloadURL(url, name) {
+    try {
+      const blob = await (await fetch(url)).blob(); const u = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = u; a.download = name; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 4000); toast(`Downloading ${name}`, 'download');
+    } catch { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; document.body.append(a); a.click(); a.remove(); }
+  }
   function mountImages(el, spec) {
     el.className = 'gen-wrap';
     const grid = document.createElement('div'); grid.className = 'gen-grid';
     for (let i = 0; i < 4; i++) {
       const fig = document.createElement('figure'); fig.tabIndex = 0; fig.setAttribute('role', 'button'); fig.setAttribute('aria-label', `Open variation ${i + 1}`);
-      fig.append(canvasFor({ prompt: spec.prompt, seed: variationSeed(spec, i) }, 640, 400));
+      const ph = canvasFor({ prompt: spec.prompt, seed: variationSeed(spec, i) }, 640, 400); fig.append(ph);
+      if (AI_MEDIA) {
+        fig.classList.add('loading');
+        const img = new Image(); img.alt = `${Gen.title(spec.prompt, 120)}, variation ${i + 1}`; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+        const stop = setTimeout(() => { img.src = ''; fig.classList.remove('loading'); }, 60000);
+        img.onload = () => { clearTimeout(stop); ph.replaceWith(img); fig.classList.remove('loading'); fig.dataset.ai = '1'; };
+        img.onerror = () => { clearTimeout(stop); fig.classList.remove('loading'); };
+        img.src = aiImageURL(spec.prompt, variationSeed(spec, i), 960, 600);
+      }
       const cap = document.createElement('figcaption'); cap.textContent = `V${i + 1}`; fig.append(cap);
       const open = () => openLightbox(Object.assign({}, spec, { variant: i }));
       fig.addEventListener('click', open);
@@ -395,7 +422,13 @@
       <button type="button" class="pl-btn pl-dl" aria-label="Download clip" title="Download as WebM">${icon('download')}</button></div>`;
     const cv = $('canvas', el), ctx = cv.getContext('2d'), range = $('input', el), time = $('.pl-time', el), play = $('.pl-play', el);
     let playing = !reduced, pos = 0, last = performance.now(), seeking = false;
-    const paint = () => Gen.draw(ctx, W, H, spec.prompt, spec.seed, pos);
+    let key = null;
+    const paint = () => (key ? kenBurns(ctx, W, H, key, pos) : Gen.draw(ctx, W, H, spec.prompt, spec.seed, pos));
+    if (AI_MEDIA) {
+      const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
+      im.onload = () => { key = im; $('.pl-badge', el).textContent = `AI · ${DUR}s`; paint(); };
+      im.src = aiImageURL(spec.prompt, spec.seed, 1280, 720);
+    }
     const setBtn = () => { play.innerHTML = icon(playing ? 'pause' : 'play'); play.setAttribute('aria-label', playing ? 'Pause' : 'Play'); };
     setBtn(); paint();
     function frame(now) {
@@ -444,7 +477,7 @@
   function openLightbox(spec) {
     const stage = $('#lbStage'); const name = Gen.title(spec.prompt);
     $('#lb-h').textContent = name;
-    let cv = null;
+    let cv = null, aiImg = null;
     if (spec.kind === 'video') {
       $('#lbMeta').textContent = 'Video · 6 s loop · 1280 × 720 · rendered in your browser';
       const holder = document.createElement('div'); stage.replaceChildren(holder);
@@ -454,13 +487,18 @@
       $('#lbMeta').textContent = `Image · variation ${v + 1} of 4 · 1600 × 1000 · seed ${variationSeed(spec, v)}`;
       cv = canvasFor({ prompt: spec.prompt, seed: variationSeed(spec, v) }, 1600, 1000);
       stage.replaceChildren(cv);
+      if (AI_MEDIA) {
+        const img = new Image(); img.className = 'lb-img'; img.alt = name; img.referrerPolicy = 'no-referrer';
+        img.onload = () => { if (stage.contains(cv)) { stage.replaceChildren(img); aiImg = img; $('#lbMeta').textContent = `AI image · variation ${v + 1} of 4 · 1600 × 1000 · Flux`; } };
+        img.src = aiImageURL(spec.prompt, variationSeed(spec, v), 1600, 1000);
+      }
     }
     const acts = $('#lbActions'); acts.innerHTML = '';
     const mk = (label, ico, fn, primary) => { const b = document.createElement('button'); b.type = 'button'; b.className = primary ? 'btn-primary' : 'btn-ghost'; b.innerHTML = icon(ico) + esc(label); b.onclick = fn; acts.append(b); };
     if (spec.kind !== 'video') {
       mk('Previous', 'left', () => openLightbox(Object.assign({}, spec, { variant: ((spec.variant || 0) + 3) % 4 })));
       mk('Next', 'right', () => openLightbox(Object.assign({}, spec, { variant: ((spec.variant || 0) + 1) % 4 })));
-      mk('Download PNG', 'download', () => downloadCanvas(cv, `${name} v${(spec.variant || 0) + 1}.png`), true);
+      mk('Download', 'download', () => (aiImg ? downloadURL(aiImg.src, `${name} v${(spec.variant || 0) + 1}.jpg`) : downloadCanvas(cv, `${name} v${(spec.variant || 0) + 1}.png`)), true);
     } else {
       mk('Download WebM', 'download', () => $('#lbStage .pl-dl').click(), true);
     }
@@ -734,6 +772,259 @@
     return { init };
   })();
 
+  /* ---------------- AI client ----------------
+     Talks to /api/chat (a Vercel function) and streams the reply. When the
+     page is opened without the backend (a local file or a preview), the
+     built-in sample replies are used instead. */
+  const AI = { backend: null, ctrl: null, key: null, checked: false };
+  const LOCAL_PROVIDERS = ['lmstudio', 'ollama'];
+
+  async function checkBackend() {
+    if (!/^https?:$/.test(location.protocol)) { AI.checked = true; paintModel(); return; }
+    try {
+      const c = new AbortController(); const t = setTimeout(() => c.abort(), 6000);
+      const r = await fetch('/api/health', { signal: c.signal, cache: 'no-store' }); clearTimeout(t);
+      const j = r.ok ? await r.json() : null;
+      if (j && j.ok) { AI.backend = j; log(`AI online · ${j.provider} · ${j.model}`); }
+    } catch { /* backend not available here */ }
+    AI.checked = true; paintModel();
+  }
+  const ownModelActive = () => !!(state.model && state.choice !== 'Auto' && (LOCAL_PROVIDERS.includes(state.model.providerId) ? state.model.baseUrl : AI.key));
+  const usingLocal = () => ownModelActive() && LOCAL_PROVIDERS.includes(state.model.providerId);
+  const aiAvailable = () => !!AI.backend || usingLocal();
+
+  function buildSystem() {
+    const P = state.prefs || {}; const brand = state.brand.name;
+    const lines = [
+      `You are ${brand}, an AI assistant inside the ${brand} workspace app. Today is ${new Date().toDateString()}.`,
+      'Be accurate, practical and friendly. Format answers in Markdown: short paragraphs, lists and tables where they help.',
+      'When asked to write code, give complete, working code in fenced code blocks with a language tag (```html, ```python, ```javascript, ```php, ```sql …). For a web page or UI, put everything in ONE ```html block with inline CSS and JavaScript so it can be previewed. After the code, explain briefly how to use it.',
+      `Response mode: ${state.mode}.${state.mode === 'Plan' ? ' Outline the plan as numbered steps before doing the work.' : state.mode === 'Quick' ? ' Keep the answer short.' : ''}`,
+      `Style: ${P.tone || 'Balanced'}.`,
+    ];
+    if (P.replyLanguage && P.replyLanguage !== 'Match my message') lines.push(`Always reply in ${P.replyLanguage}.`); else lines.push("Reply in the language of the user's message.");
+    if (P.displayName) lines.push(`The user's name is ${P.displayName}.`);
+    if (P.instructions) lines.push(`User's custom instructions:\n${P.instructions}`);
+    const ws = state.workspace;
+    if (ws && ws.files && ws.files.length) lines.push(`The user opened a workspace folder "${ws.name}" with ${ws.files.length} files, including:\n${ws.files.slice(0, 80).map((f) => `- ${f.name} (${f.size})`).join('\n')}`);
+    if (!P.capWeb) lines.push('You cannot browse the web in this app.');
+    return lines.join('\n\n');
+  }
+
+  const htmlToText = (h) => String(h || '').replace(/<br\s*\/?>/g, '\n').replace(/<\/(p|li|h\d|div|tr)>/g, '\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\n{3,}/g, '\n\n').trim();
+
+  function historyFor(c) {
+    return c.messages.map((m) => {
+      if (m.role === 'user') {
+        let content = m.text;
+        (m.attach || []).forEach((a) => { content += a.text ? `\n\nAttached file "${a.name}":\n\`\`\`\n${a.text}\n\`\`\`` : `\n\n[Attached file: ${a.name}]`; });
+        if (!m.attach && m.files && m.files.length) content += `\n\n[Attached files: ${m.files.join(', ')}]`;
+        return { role: 'user', content };
+      }
+      return { role: 'assistant', content: m.text || htmlToText(m.html) };
+    }).filter((m) => m.content);
+  }
+
+  // Parses an OpenAI-style SSE stream into a text stream (used for local LM Studio / Ollama).
+  function sseText(res) {
+    const reader = res.body.getReader(); const dec = new TextDecoder(); const enc = new TextEncoder(); let buf = '';
+    return new ReadableStream({
+      async pull(ctrl) {
+        for (;;) {
+          const nl = buf.indexOf('\n');
+          if (nl >= 0) {
+            const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+            if (!line.startsWith('data:')) continue;
+            const d = line.slice(5).trim(); if (d === '[DONE]') { ctrl.close(); return; }
+            try { const t = JSON.parse(d).choices?.[0]?.delta?.content; if (t) { ctrl.enqueue(enc.encode(t)); return; } } catch { /* skip */ }
+            continue;
+          }
+          const { done, value } = await reader.read(); if (done) { ctrl.close(); return; }
+          buf += dec.decode(value, { stream: true });
+        }
+      },
+      cancel() { reader.cancel().catch(() => {}); },
+    });
+  }
+
+  async function openStream(c, signal) {
+    const messages = historyFor(c); const system = buildSystem();
+    if (usingLocal()) {
+      let base = state.model.baseUrl.replace(/\/+$/, ''); if (state.model.providerId === 'ollama' && !/\/v1$/.test(base)) base += '/v1';
+      const r = await fetch(`${base}/chat/completions`, { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: state.model.model, stream: true, messages: [{ role: 'system', content: system }, ...messages] }) });
+      if (!r.ok) throw new Error(`${state.model.provider} returned ${r.status}. Check that the server is running and allows this site (CORS).`);
+      return (r.headers.get('content-type') || '').includes('event-stream') ? sseText(r) : new Response(JSON.parse(await r.text()).choices?.[0]?.message?.content || '').body;
+    }
+    const override = ownModelActive() && !usingLocal() ? { provider: state.model.providerId, apiKey: AI.key, model: state.model.model } : undefined;
+    const r = await fetch('/api/chat', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages, system, override }) });
+    if (!r.ok) { let msg = `The AI service returned ${r.status}.`; try { msg = (await r.json()).error || msg; } catch { /* not json */ } throw new Error(msg); }
+    return r.body;
+  }
+
+  /* Markdown → HTML (escape first, then format) */
+  const CODE_EXT = { html: 'html', htm: 'html', xml: 'xml', svg: 'svg', css: 'css', scss: 'scss', js: 'js', javascript: 'js', jsx: 'jsx', ts: 'ts', typescript: 'ts', tsx: 'tsx', json: 'json', python: 'py', py: 'py', php: 'php', java: 'java', kotlin: 'kt', swift: 'swift', c: 'c', cpp: 'cpp', 'c++': 'cpp', csharp: 'cs', cs: 'cs', go: 'go', rust: 'rs', ruby: 'rb', sql: 'sql', bash: 'sh', sh: 'sh', shell: 'sh', powershell: 'ps1', yaml: 'yml', yml: 'yml', markdown: 'md', md: 'md', dockerfile: 'Dockerfile', vue: 'vue', dart: 'dart' };
+  function inl(t) {
+    const codes = [];
+    t = t.replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+    t = esc(t)
+      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?=[^*\w]|$)/g, '$1<em>$2</em>')
+      .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    return t.replace(/\u0000(\d+)\u0000/g, (m, n) => `<code>${esc(codes[+n])}</code>`);
+  }
+  function codeBlockHTML(code, lang, closed) {
+    const l = (lang || '').toLowerCase(); const canPreview = l === 'html' || l === 'htm' || l === 'svg';
+    const lines = code.split('\n').length;
+    return `<div class="code-block${closed ? '' : ' writing'}" data-lang="${esc(l)}">
+      <div class="cb-head"><span class="cb-lang">${icon('code')}${esc(l || 'text')}<small>${lines} line${lines === 1 ? '' : 's'}</small></span>
+      <span class="cb-actions">${canPreview ? `<button type="button" data-cb="preview">${icon('play')}Preview</button>` : ''}<button type="button" data-cb="copy">${icon('copy')}Copy</button><button type="button" data-cb="download">${icon('download')}Download</button></span></div>
+      <pre><code class="${l ? 'language-' + esc(l) : ''}">${esc(code)}</code></pre></div>`;
+  }
+  function md(src) {
+    const L = String(src || '').replace(/\r/g, '').split('\n'); let i = 0, out = '';
+    const isBlockStart = (s) => /^```/.test(s) || /^#{1,6}\s/.test(s) || /^\s*>/.test(s) || /^\s*([-*+]|\d+[.)])\s+/.test(s) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(s);
+    while (i < L.length) {
+      const line = L[i];
+      const fence = /^```\s*([\w+#.-]*)/.exec(line);
+      if (fence) {
+        const buf = []; i++;
+        while (i < L.length && !/^```\s*$/.test(L[i])) buf.push(L[i++]);
+        const closed = i < L.length; i++;
+        out += codeBlockHTML(buf.join('\n'), fence[1], closed); continue;
+      }
+      if (!line.trim()) { i++; continue; }
+      const h = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (h) { const lv = Math.min(6, h[1].length + 2); out += `<h${lv}>${inl(h[2])}</h${lv}>`; i++; continue; }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { out += '<hr>'; i++; continue; }
+      if (/^\s*>/.test(line)) { const q = []; while (i < L.length && /^\s*>/.test(L[i])) q.push(L[i++].replace(/^\s*>\s?/, '')); out += `<blockquote>${q.map(inl).join('<br>')}</blockquote>`; continue; }
+      if (line.includes('|') && i + 1 < L.length && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(L[i + 1])) {
+        const cells = (s) => s.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const head = cells(line); i += 2; const rows = [];
+        while (i < L.length && L[i].includes('|') && L[i].trim()) rows.push(cells(L[i++]));
+        out += `<div class="tbl-wrap"><table class="tbl"><thead><tr>${head.map((c) => `<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inl(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+        continue;
+      }
+      const li = /^\s*([-*+]|\d+[.)])\s+/.exec(line);
+      if (li) {
+        const ordered = /\d/.test(li[1]); const items = [];
+        while (i < L.length) {
+          const m = /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(L[i]);
+          if (m) { items.push(m[2]); i++; continue; }
+          if (L[i].trim() && /^\s{2,}/.test(L[i]) && items.length) { items[items.length - 1] += ' ' + L[i].trim(); i++; continue; }
+          break;
+        }
+        out += `<${ordered ? 'ol' : 'ul'}>${items.map((t) => `<li>${inl(t.replace(/^\[( |x)\]\s*/i, (m, x) => (x.trim() ? '☑ ' : '☐ ')))}</li>`).join('')}</${ordered ? 'ol' : 'ul'}>`;
+        continue;
+      }
+      const para = [line]; i++;
+      while (i < L.length && L[i].trim() && !isBlockStart(L[i]) && !(L[i].includes('|') && i + 1 < L.length && /^\s*\|?\s*:?-{3,}/.test(L[i + 1]))) para.push(L[i++]);
+      out += `<p>${para.map(inl).join('<br>')}</p>`;
+    }
+    return out;
+  }
+  function highlight(root) {
+    if (!window.hljs) return;
+    $$('pre code[class*="language-"]', root).forEach((el) => {
+      if (el.dataset.hl) return; const lang = (el.className.match(/language-([\w+#.-]+)/) || [])[1];
+      if (lang && window.hljs.getLanguage(lang)) { try { window.hljs.highlightElement(el); el.dataset.hl = '1'; } catch { /* leave plain */ } }
+    });
+  }
+
+  function codeArtifacts(text, title) {
+    const re = /```\s*([\w+#.-]*)\n([\s\S]*?)```/g; let m, n = 0;
+    while ((m = re.exec(text))) {
+      const lang = (m[1] || 'txt').toLowerCase(); const code = m[2]; const lines = code.split('\n').length;
+      if (lines < 6 || code.length > 60000) continue;
+      const ext = CODE_EXT[lang] || 'txt'; n++;
+      const base = title.replace(/[^\w\- ]+/g, '').trim().slice(0, 32) || 'Code';
+      const name = `${base}${n > 1 ? ' ' + n : ''}.${ext}`;
+      state.artifacts = state.artifacts.filter((a) => a.name !== name);
+      state.artifacts.unshift({ name, kind: 'code', lang, meta: `${lang.toUpperCase()} · ${lines} lines`, time: now(), code, gen: true });
+      log(`Saved ${name} to Artifacts`);
+    }
+  }
+
+  function openCode(code, lang, name, mode) {
+    const l = (lang || '').toLowerCase(); const canPreview = l === 'html' || l === 'htm' || l === 'svg';
+    const show = mode || (canPreview ? 'preview' : 'code');
+    $('#lb-h').textContent = name || `${l || 'Code'} snippet`;
+    $('#lbMeta').textContent = `${(l || 'text').toUpperCase()} · ${code.split('\n').length} lines${show === 'preview' ? ' · live preview (sandboxed)' : ''}`;
+    const stage = $('#lbStage');
+    if (show === 'preview') {
+      const f = document.createElement('iframe'); f.className = 'code-preview'; f.title = 'Code preview';
+      f.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups');
+      f.srcdoc = l === 'svg' ? `<!doctype html><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${code}</body>` : code;
+      stage.replaceChildren(f);
+    } else {
+      stage.innerHTML = `<pre class="code-view"><code class="${l ? 'language-' + esc(l) : ''}">${esc(code)}</code></pre>`; highlight(stage);
+    }
+    const acts = $('#lbActions'); acts.innerHTML = '';
+    const mk = (label, ico, fn, primary) => { const b = document.createElement('button'); b.type = 'button'; b.className = primary ? 'btn-primary' : 'btn-ghost'; b.innerHTML = icon(ico) + esc(label); b.onclick = fn; acts.append(b); };
+    if (canPreview) mk(show === 'preview' ? 'View code' : 'Preview', show === 'preview' ? 'code' : 'play', () => openCode(code, l, name, show === 'preview' ? 'code' : 'preview'));
+    mk('Copy', 'copy', () => copy(code, 'Code copied'));
+    mk('Download', 'download', () => downloadText(code, name || `code.${CODE_EXT[l] || 'txt'}`), true);
+    if ($('#lightbox').hidden) openModal('lightbox');
+  }
+  function downloadText(text, name) {
+    try {
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); toast(`Downloading ${name}`, 'download');
+    } catch { toast('Download was blocked by the browser.', 'x'); }
+  }
+  function codeAction(btn) {
+    const block = btn.closest('.code-block'); const code = $('code', block).textContent; const lang = block.dataset.lang;
+    const name = `snippet.${CODE_EXT[lang] || 'txt'}`;
+    if (btn.dataset.cb === 'copy') copy(code, 'Code copied');
+    else if (btn.dataset.cb === 'download') downloadText(code, name);
+    else openCode(code, lang, name, 'preview');
+  }
+
+  function setStreaming(on) {
+    const b = $('#sendBtn');
+    b.classList.toggle('stop', on); b.disabled = false;
+    b.setAttribute('aria-label', on ? 'Stop generating' : 'Send message');
+    b.innerHTML = icon(on ? 'stop' : 'up');
+  }
+
+  async function streamReply(holder, c, title) {
+    const body = $('.body', holder);
+    AI.ctrl = new AbortController(); setStreaming(true);
+    let out = '', error = '', stopped = false, raf = 0;
+    const paint = () => { raf = 0; body.innerHTML = md(out) + '<span class="caret"></span>'; scrollDown(true); };
+    try {
+      const stream = await openStream(c, AI.ctrl.signal);
+      const reader = stream.getReader(); const dec = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read(); if (done) break;
+        out += dec.decode(value, { stream: true });
+        if (!raf) raf = requestAnimationFrame(paint);
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') stopped = true; else error = e.message || 'Something went wrong.';
+    }
+    if (raf) cancelAnimationFrame(raf);
+    AI.ctrl = null; setStreaming(false);
+    let html = md(out);
+    if (stopped) html += '<p class="note">Stopped.</p>';
+    if (error) html += `<div class="ai-error">${icon('x')}<span>${esc(error)}</span><button type="button" class="mini-btn" data-retry="1">${icon('right')}Try again</button></div>`;
+    if (!out && !error && !stopped) html = '<p class="note">The model returned an empty reply. Try rephrasing your message.</p>';
+    body.innerHTML = html; highlight(body); scrollDown(true);
+    if (out) {
+      c.messages.push({ role: 'ai', text: out, html: md(out) });
+      codeArtifacts(out, title);
+    }
+    return { out, error };
+  }
+
+  function retryLast() {
+    const c = current(); if (!c) return;
+    while (c.messages.length && c.messages[c.messages.length - 1].role === 'ai') c.messages.pop();
+    const last = c.messages.pop(); if (!last) return;
+    renderThread(); send(last.text, last.attach);
+  }
+
   /* ---------------- Greeting ---------------- */
   function greeting() {
     const h = new Date().getHours();
@@ -792,7 +1083,7 @@
       '> verifying local runtime ........ OK',
       '> sandbox policy: workspace-only .. OK',
       '> channel encryption: AES-256 ..... OK',
-      `> model link: ${state.model ? state.model.provider.toUpperCase() + ' ..... ONLINE' : 'none ............ STANDBY'}`,
+      `> model link: ${AI.backend ? AI.backend.provider.toUpperCase() + ' ..... ONLINE' : 'checking ........ STANDBY'}`,
       '> session ready.',
     ];
     for (const l of lines) { pre.textContent += l + '\n'; await sleep(150); }
@@ -915,7 +1206,7 @@
         return Object.assign({}, p, chats.length ? { text: `${p.text} · moved here: ${chats.map((c) => c.title).slice(0, 3).join(', ')}${chats.length > 3 ? '…' : ''}`, pill: ['on', `${chats.length} chat${chats.length > 1 ? 's' : ''}`] } : {});
       }) },
     artifacts: { title: 'Artifacts', sub: 'Workspace · Artifacts', icon: 'grid', desc: 'Documents, spreadsheets, PDFs and images the agent has created. New files from chat appear here.', action: 'Create in chat', run: () => newChat(),
-      items: () => state.artifacts.map((a) => ({ ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image', webm: 'video' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3', webm: 'c4' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name, media: a.media })) },
+      items: () => state.artifacts.map((a) => ({ code: a.code, lang: a.lang, ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image', webm: 'video', code: 'code' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3', webm: 'c4' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name, media: a.media })) },
     scheduled: { title: 'Scheduled', sub: 'Workspace · Scheduled', icon: 'clock', desc: 'Tasks the agent runs on a timetable, like a morning inbox digest or a Friday report.', action: 'New schedule', run: () => addSchedule(),
       items: () => state.schedules },
     team: { title: 'Team room', sub: 'Workspace · Team room', icon: 'users', desc: 'Share chats and agents with teammates. Everyone sees the same files and history.', action: 'Copy invite link', run: () => copy(location.href.split('#')[0] + '#' + (state.skin || 'glass'), 'Invite link copied'),
@@ -995,7 +1286,7 @@
     }));
     $$('#sectionInner button.card').forEach((c) => c.addEventListener('click', () => {
       const it = items[+c.dataset.card];
-      if (id === 'artifacts') { if (it.media) openLightbox(it.media); else toast(`${it.title} is ready to open in the desktop app`, 'file'); }
+      if (id === 'artifacts') { if (it.media) openLightbox(it.media); else if (it.code) openCode(it.code, it.lang, it.title); else toast(`${it.title} is ready to open in the desktop app`, 'file'); }
       else if (id === 'projects' || id === 'team') { newChat(); $('#prompt').value = `Let's continue with "${it.title}". `; autosize(); $('#prompt').focus(); }
       else if (id === 'code') { newChat(); $('#prompt').value = `In ${it.title}, `; autosize(); $('#prompt').focus(); }
     }));
@@ -1053,6 +1344,7 @@
     applyBrand();
     paintLogos(th);
     hydrateMedia(th);
+    highlight(th);
     scrollDown(true);
     renderRecents();
   }
@@ -1073,23 +1365,32 @@
     sc.scrollTo({ top: sc.scrollHeight, behavior: instant || reduced ? 'auto' : 'smooth' });
   }
 
+  function mediaIntent(text) {
+    const t = text.toLowerCase();
+    if (/\b(code|html|css|javascript|python|php|react|component|function|script|website|web page|webpage|landing page|app|api|sql)\b/.test(t)) return null;
+    const verb = /\b(generate|create|make|draw|render|design|paint|produce|show me|give me|imagine)\b/.test(t);
+    if (/\b(video|clip|animation|animate|movie|footage|reel)\b/.test(t) && (verb || /^\s*(a |an )?(\d+[- ]?second )?(video|clip|animation)\b/.test(t))) return 'video';
+    if (/\b(image|images|picture|photo|illustration|drawing|wallpaper|artwork|poster|logo|painting|portrait)\b/.test(t) && verb) return 'image';
+    if (/^\s*(draw|paint|imagine)\b/.test(t)) return 'image';
+    return null;
+  }
   function makeReply(text, files) {
     const t = text.toLowerCase();
     const B = [];
     const brand = state.brand.name;
-    if (!state.model) B.push({ type: 'note', text: 'Preview reply: no model is connected yet, so this answer is a sample. Use Set up a model to get real answers.' });
+    if (!aiAvailable() && !mediaIntent(text)) B.push({ type: 'note', text: 'Offline preview: live AI is not available here, so this is a sample reply. It turns on automatically on your Vercel site.' });
     if (state.mode === 'Plan') B.push({ type: 'p', text: 'Plan mode is on, so here is the plan before I touch anything.' });
     if (files && files.length) B.push({ type: 'p', text: `I received ${files.length} attachment${files.length > 1 ? 's' : ''}: ${files.join(', ')}. I'll use ${files.length > 1 ? 'them' : 'it'} as context.` });
 
-    const wantsVideo = /\b(video|clip|animation|animate|movie|footage|reel)\b/.test(t);
-    const wantsImage = !wantsVideo && /\b(image|images|picture|photo|illustration|draw|drawing|render|wallpaper|artwork|poster|logo|painting)\b/.test(t);
+    const intent = mediaIntent(text);
+    const wantsVideo = intent === 'video', wantsImage = intent === 'image';
     if ((wantsVideo && !state.prefs.capVideo) || (wantsImage && !state.prefs.capImages)) {
       return [{ type: 'note', text: `${wantsVideo ? 'Video' : 'Image'} generation is turned off. Turn it on in Settings → Capabilities.` }];
     }
     if (wantsVideo || wantsImage) {
       const spec = { kind: wantsVideo ? 'video' : 'image', prompt: text, seed: Gen.hash(text + now()) };
       const name = Gen.title(text);
-      const B2 = [{ type: 'note', text: 'Test generation: rendered in your browser with no API, so you can try the flow. Connect a model provider for real AI images and video.' }];
+      const B2 = [{ type: 'note', text: wantsVideo ? 'This clip animates an AI-generated keyframe (Flux, free). If the image cannot load, a local animation is used instead.' : 'AI images are generated with the free Flux model. If an image cannot load, a local preview is drawn instead.' }];
       if (state.mode === 'Plan') B2.push({ type: 'p', text: `Plan: read the prompt, compose the scene, render ${wantsVideo ? 'a 6-second loop' : '4 variations'}, then save to Artifacts.` });
       if (wantsVideo) {
         B2.push({ type: 'p', text: `Here is a 6-second clip of "${name}". It loops; pause, scrub or download it as WebM with the controls.` });
@@ -1154,7 +1455,8 @@
     }
   }
 
-  async function send(raw) {
+  async function send(raw, reAttach) {
+    if (AI.ctrl) { AI.ctrl.abort(); return; }
     const text = (raw ?? $('#prompt').value).trim();
     if (!text || state.busy) return;
     state.busy = true;
@@ -1165,8 +1467,9 @@
       state.convos.unshift(c);
       state.current = c.id;
     }
-    const files = state.attachments.map((f) => f.name);
-    c.messages.push({ role: 'user', text, files });
+    const attach = reAttach || state.attachments.map((f) => ({ name: f.name, text: f.text || '' }));
+    const files = attach.map((f) => f.name);
+    c.messages.push({ role: 'user', text, files, attach: attach.length ? attach : undefined });
     c.updated = now();
     state.attachments = []; renderAttachments();
     $('#prompt').value = ''; autosize();
@@ -1179,6 +1482,16 @@
     holder.className = 'msg ai';
     holder.innerHTML = `<span class="avatar"><span class="logo" data-logo="28"></span></span><div class="body"><span class="typing" aria-label="Thinking"><i></i><i></i><i></i></span></div>`;
     $('#thread').append(holder); paintLogos(holder); scrollDown();
+    if (aiAvailable() && !mediaIntent(text)) {
+      const { out } = await streamReply(holder, c, c.title);
+      c.updated = now(); save(); renderRecents();
+      if (out && state.voice && 'speechSynthesis' in window) {
+        try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(htmlToText(md(out.replace(/```[\s\S]*?```/g, ' (code) '))).slice(0, 1500))); } catch { /* speech unavailable */ }
+      }
+      if (state.skin === 'cyber') $('#cyState').textContent = 'link online';
+      state.busy = false; $('#sendBtn').disabled = false;
+      return;
+    }
     await sleep(reduced ? 50 : 650 + Math.random() * 500);
 
     const blocks = makeReply(text, files);
@@ -1221,7 +1534,7 @@
     if (state.voice && 'speechSynthesis' in window) {
       try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(blocks.filter((b) => b.type === 'p').map((b) => b.text).join(' '))); } catch { /* speech unavailable */ }
     }
-    if (state.skin === 'cyber') $('#cyState').textContent = state.model ? 'link online' : 'awaiting model';
+    if (state.skin === 'cyber') $('#cyState').textContent = aiAvailable() ? 'link online' : 'offline preview';
     state.busy = false;
     $('#sendBtn').disabled = false;
   }
@@ -1268,28 +1581,30 @@
     if (!local && key.length < 8) { err.textContent = `Paste the API key from your ${provSel.name} dashboard. It should be longer than 8 characters.`; $('#apiKey').focus(); return; }
     if (local && !/^https?:\/\//.test(url)) { err.textContent = 'Enter the server address, starting with http:// (for example http://localhost:1234/v1).'; $('#baseUrl').focus(); return; }
     if (!model) { err.textContent = 'Enter the model name to use.'; $('#modelId').focus(); return; }
-    state.model = { providerId: provSel.id, provider: provSel.name, model };
+    state.model = { providerId: provSel.id, provider: provSel.name, model, baseUrl: local ? url : undefined };
+    AI.key = local ? null : key;
     store.set('model', state.model);
     state.choice = model;
+    if (!local && !AI.backend) toast('Your key works through the GAS Agent server, so it needs the Vercel site.', 'key');
     closeModals();
     paintModel();
     toast(`Connected to ${provSel.name}`);
     log(`Model connected: ${provSel.name} / ${model}`);
   }
   function disconnectModel() {
-    state.model = null; state.choice = 'Auto';
+    state.model = null; state.choice = 'Auto'; AI.key = null;
     store.set('model', null);
     paintModel();
     toast('Model disconnected', 'x');
     log('Model disconnected');
   }
   function paintModel() {
-    const m = state.model;
-    $('#connectCard').hidden = !!m;
-    $('#modelName').textContent = m ? (state.choice === 'Auto' ? 'Auto' : state.choice) : 'Auto';
-    $('#modelDot').classList.toggle('on', !!m);
-    $('#stModel').textContent = m ? `Model: ${m.provider}` : 'Model: none';
-    $('#cyState').textContent = m ? 'link online' : 'awaiting model';
+    const own = ownModelActive(), b = AI.backend, online = !!b || usingLocal();
+    $('#modelName').textContent = own ? state.model.model : (b || !AI.checked ? 'Auto' : 'Offline');
+    $('#modelDot').classList.toggle('on', online);
+    $('#modelBtn').title = own ? `${state.model.provider} · ${state.model.model}` : b ? `${b.provider} · ${b.model}` : 'Offline preview';
+    $('#stModel').textContent = online ? `Model: ${own ? state.model.provider : b.provider}` : 'Model: offline';
+    $('#cyState').textContent = online ? 'link online' : 'offline preview';
     if (!$('#settingsModal').hidden) renderSettings();
   }
 
@@ -1333,11 +1648,11 @@
       (v) => { state.mode = v; $('#modeName').textContent = v; toast(`${v} mode`); log(`Mode set to ${v}`); });
   }
   function modelMenu(a) {
-    const opts = [['Auto', 'Picks the best model for each task']];
-    if (state.model) opts.push([state.model.model, `${state.model.provider} · connected`]);
+    const opts = [['Auto', AI.backend ? `Built-in AI · ${AI.backend.provider} · ${AI.backend.model}` : 'Offline preview · live AI turns on at your Vercel site']];
+    if (state.model) opts.push([state.model.model, `${state.model.provider} · ${LOCAL_PROVIDERS.includes(state.model.providerId) || AI.key ? 'your model' : 'enter your key again to use it'}`]);
     popover(a, `<p class="pop-title">Model</p>` + opts.map(([n, d]) => `<button class="pop-item" data-pick="${esc(n)}">${icon('cpu')}<span><b>${esc(n)}</b><small>${esc(d)}</small></span>${state.choice === n ? icon('check', 'chk') : ''}</button>`).join('')
-      + `<button class="pop-item" data-pick="__setup">${icon('key')}<span><b>${state.model ? 'Change provider' : 'Set up a model'}</b><small>OpenRouter, OpenAI, Anthropic, Gemini, LM Studio, Ollama</small></span></button>`,
-      (v) => { if (v === '__setup') openModel(); else { state.choice = v; paintModel(); } });
+      + `<button class="pop-item" data-pick="__setup">${icon('key')}<span><b>Use your own model</b><small>Your API key, or LM Studio / Ollama on this computer</small></span></button>`,
+      (v) => { if (v === '__setup') openModel(); else if (v !== 'Auto' && state.model && !LOCAL_PROVIDERS.includes(state.model.providerId) && !AI.key) openModel(); else { state.choice = v; paintModel(); } });
   }
   function skinMenu(a) {
     popover(a, `<p class="pop-title">Interface</p>` + Object.entries(SKINS).map(([k, v]) => `<button class="pop-item" data-pick="${k}"><span class="sw sw-${k}"></span><span><b>${v.name}</b><small>${v.label}</small></span>${state.skin === k ? icon('check', 'chk') : ''}</button>`).join('')
@@ -1347,8 +1662,8 @@
   function plusMenu(a) {
     popover(a, `<p class="pop-title">Add or create</p>
       <button class="pop-item" data-pick="files">${icon('clip')}<span><b>Attach files</b><small>Add documents or images as context</small></span></button>
-      <button class="pop-item" data-pick="image">${icon('image')}<span><b>Generate an image</b><small>4 variations, test mode, no API</small></span></button>
-      <button class="pop-item" data-pick="video">${icon('video')}<span><b>Create a video</b><small>6-second loop, test mode, no API</small></span></button>`,
+      <button class="pop-item" data-pick="image">${icon('image')}<span><b>Generate an image</b><small>4 AI variations · free Flux model</small></span></button>
+      <button class="pop-item" data-pick="video">${icon('video')}<span><b>Create a video</b><small>6-second AI motion clip</small></span></button>`,
       (v) => {
         if (v === 'files') { $('#fileInput').click(); return; }
         $('#prompt').value = v === 'image' ? 'Generate an image of ' : 'Create a 6-second video of ';
@@ -1358,10 +1673,10 @@
   function notifMenu(a) {
     $('#bellBtn').classList.remove('has-dot');
     popover(a, `<p class="pop-title">Notifications</p>
-      <button class="pop-item" data-pick="model">${icon('key')}<span><b>${state.model ? 'Model connected' : 'Connect a model'}</b><small>${state.model ? esc(state.model.provider + ' is ready for chats') : 'Answers are samples until a model is connected'}</small></span></button>
+      <button class="pop-item" data-pick="model">${icon('key')}<span><b>${aiAvailable() ? 'AI is online' : 'Offline preview'}</b><small>${AI.backend ? esc(`${AI.backend.provider} · ${AI.backend.model}`) : usingLocal() ? esc(state.model.provider + ' on this computer') : 'Live AI turns on at your Vercel site'}</small></span></button>
       <button class="pop-item" data-pick="scheduled">${icon('clock')}<span><b>Weekly status report</b><small>Runs Friday at 16:00</small></span></button>
       <button class="pop-item" data-pick="team">${icon('users')}<span><b>Amira shared “Design review”</b><small>Team room · 5 min ago</small></span></button>`,
-      (v) => { if (v === 'model') { if (!state.model) openModel(); } else showSection(v); });
+      (v) => { if (v === 'model') { if (!aiAvailable()) openModel(); } else showSection(v); });
   }
 
   /* Command palette */
@@ -1516,8 +1831,8 @@
       case 'action': return `<div class="set-row">${head()}<button type="button" class="${r.danger ? 'btn-ghost danger' : 'btn-ghost'}" data-setaction="${esc(r.label)}">${esc(r.button)}</button></div>`;
       case 'skins': return `<div class="set-row stack">${head()}<div class="set-skins">${Object.entries(SKINS).map(([k, v]) => `<button type="button" class="set-skin${state.skin === k ? ' on' : ''}" data-skinpick="${k}"><span class="sp sp-${k}"></span><b>${v.name}</b><small>${v.label}</small></button>`).join('')}</div></div>`;
       case 'model': {
-        const m = state.model;
-        return `<div class="set-row"><div class="set-text"><b>Model provider</b><small>${m ? `Connected to ${esc(m.provider)} · ${esc(m.model)}` : 'Not connected. Replies are samples until you connect a provider.'}</small></div><button type="button" class="${m ? 'btn-ghost' : 'btn-primary'}" data-setaction="model">${m ? 'Disconnect' : 'Set up a model'}</button></div>`;
+        const own = ownModelActive(), b = AI.backend;
+        return `<div class="set-row"><div class="set-text"><b>Model</b><small>${own ? `Using your ${esc(state.model.provider)} model · ${esc(state.model.model)}` : b ? `Built-in AI is online · ${esc(b.provider)} · ${esc(b.model)}${b.free ? ' (free)' : ''}` : 'Offline preview here. Live AI turns on automatically on your Vercel site.'}</small></div><button type="button" class="btn-ghost" data-setaction="model">${own ? 'Use built-in AI' : 'Use your own model'}</button></div>`;
       }
       case 'plan-summary': {
         const pl = planById(state.billing.plan);
@@ -1696,7 +2011,7 @@
       const act = t.closest('[data-setaction]');
       if (act) {
         const k = act.dataset.setaction;
-        if (k === 'model') { if (state.model) { disconnectModel(); renderSettings(); } else { closeModals(); openModel(); } return; }
+        if (k === 'model') { if (ownModelActive()) { disconnectModel(); renderSettings(); } else { closeModals(); openModel(); } return; }
         const r = SET_SECTIONS.flatMap((s) => s.rows || []).find((x) => x.label === k); r && r.run(); return;
       }
       const cf = t.closest('[data-confirm]');
@@ -1758,12 +2073,16 @@
     if (state.section === 'code') renderSection('code');
     e.target.value = '';
   }
-  function onFiles(e) {
-    const files = Array.from(e.target.files || []);
-    state.attachments.push(...files.map((f) => ({ name: f.name })));
+  async function onFiles(e) {
+    const files = Array.from(e.target.files || []); e.target.value = '';
+    const textLike = (f) => /^text\/|json|xml|javascript|csv|markdown|x-sh|x-python|php|sql|yaml/.test(f.type) || /\.(txt|md|csv|tsv|json|js|mjs|ts|jsx|tsx|py|php|html?|css|scss|sql|xml|ya?ml|java|kt|c|h|cpp|cs|go|rs|rb|sh|log|ini|toml|env|vue|svelte)$/i.test(f.name);
+    for (const f of files) {
+      let text = '';
+      if (textLike(f) && f.size < 300000) { try { text = (await f.text()).slice(0, 100000); } catch { /* unreadable */ } }
+      state.attachments.push({ name: f.name, text });
+    }
     renderAttachments();
-    if (files.length) toast(`${files.length} file${files.length > 1 ? 's' : ''} attached`, 'clip');
-    e.target.value = '';
+    if (files.length) toast(`${files.length} file${files.length > 1 ? 's' : ''} attached${files.some((f) => textLike(f)) ? ' · the agent can read the text' : ''}`, 'clip');
     $('#prompt').focus();
   }
 
@@ -1792,7 +2111,7 @@
   /* ---------------- Tour ---------------- */
   const TOUR = [
     { sel: '.sidebar', title: 'Your workspace', text: 'Start new chats, find recent ones, and jump to Code, Projects, Artifacts, Scheduled tasks, the Team room and Agents.' },
-    { sel: '#connectCard', title: 'Connect a model', text: 'Bring your own key from OpenRouter, OpenAI, Anthropic or Gemini, or run locally with LM Studio or Ollama.' },
+    { sel: '#modelBtn', title: 'Model', text: 'Auto uses the built-in AI. Choose “Use your own model” to plug in your own API key or a local model.' },
     { sel: '.composer', title: 'Ask anything', text: 'Attach files, generate images and videos with the + button, pick a folder, switch modes, use your voice and choose whether the agent can act without asking.' },
     { sel: '.skin-btn', title: 'Switch interface', text: 'Jump between all six interfaces at any time. Your chats and settings come with you.' },
     { sel: '.home-btn', title: 'Back home', text: 'Return to the studio home page to compare and choose another interface.' },
@@ -1847,6 +2166,9 @@
     document.addEventListener('click', (e) => {
       const a = e.target.closest('[data-action]');
       const sec = e.target.closest('.nav [data-section]');
+      const cbBtn = e.target.closest('[data-cb]');
+      if (cbBtn) { codeAction(cbBtn); return; }
+      if (e.target.closest('[data-retry]')) { retryLast(); return; }
       const cmenu = e.target.closest('[data-convo-menu]');
       if (cmenu) { e.preventDefault(); convoMenu(cmenu); return; }
       const conv = e.target.closest('[data-convo]');
@@ -1899,7 +2221,7 @@
     $('#composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
     $('#prompt').addEventListener('input', () => { autosize(); Core.listen(); });
     $('#prompt').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!AI.ctrl) send(); }
     });
     $$('.suggest').forEach((b) => b.addEventListener('click', () => send(b.textContent.trim())));
     $('#recentSearch').addEventListener('input', renderRecents);
@@ -1947,6 +2269,8 @@
   paintPlan();
   initStudio();
   paintModel();
+  checkBackend();
+  window.addEventListener('load', () => highlight(document));
   renderRecents();
   renderThread();
   log('Session started');

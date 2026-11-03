@@ -40,17 +40,47 @@ Every push then deploys automatically: the production branch goes to your main U
 - Sidebar: New chat, searchable Recents, Code, Projects, Artifacts, Scheduled, Team room, Agents, Open local folder, Guide & tour, Settings
 - **Home** button and interface menu in every skin to go back to the studio or switch skins
 - **Image and video generation (test mode, no API):** 4 image variations with full-size viewer and PNG download; 6-second looping video with play/pause, scrubbing and WebM export. Scenes are painted on canvas from the prompt (city, ocean, mountains, space, forest, abstract) and saved to Artifacts
-- Time-based greeting, "Connect a model" card and a model setup dialog (OpenRouter, OpenAI, Anthropic, Gemini, LM Studio, Ollama)
+- Time-based greeting and an optional "Use your own model" dialog (OpenRouter, OpenAI, Anthropic, Gemini, LM Studio, Ollama)
 - Composer: + menu (attach files, generate image, create video), open a real local folder, Normal / Plan / Quick modes, voice input (where the browser supports it), read replies aloud, Auto-approve, model picker
 - Sample replies with tables and file cards; created files appear in Artifacts
 - Command palette (`Ctrl/Cmd + K`), notifications, activity log, share link, guided tour
 - White label: change the product name and subtitle in the studio or Settings; it updates every skin
 - Responsive down to phone width
 
-Replies and media are simulated in this front end. Connect `send()` / `makeReply()` in `assets/app.js` to your agent backend (and swap the `Gen` canvas renderer for your image/video API) to get real model output. API keys are never written to storage.
+## Live AI (works right after deploying)
+
+On Vercel, chat replies come from a real model through the serverless functions in `api/`:
+
+- `api/chat.js` streams the reply (`POST /api/chat`)
+- `api/health.js` tells the app which model is answering (`GET /api/health`)
+- `api/_llm.js` picks the provider from environment variables
+
+With no setup at all it uses a free public model (Pollinations), so the app works as soon as it is deployed. To use your own provider, add **one** of these in Vercel → Project → Settings → Environment Variables, then redeploy:
+
+| Variable | Model used (override with the second variable) |
+|---|---|
+| `ANTHROPIC_API_KEY` | `claude-sonnet-5-5` (`ANTHROPIC_MODEL`) |
+| `OPENAI_API_KEY` | `gpt-4o-mini` (`OPENAI_MODEL`) |
+| `OPENROUTER_API_KEY` | `openrouter/auto` (`OPENROUTER_MODEL`) |
+| `GEMINI_API_KEY` | `gemini-2.5-flash` (`GEMINI_MODEL`) |
+| `LLM_BASE_URL` | any OpenAI-compatible server (`LLM_API_KEY`, `LLM_MODEL`, `LLM_NAME`) |
+
+Set `DISABLE_FREE_MODEL=1` to turn off the free fallback. Keys stay on the server; visitors never see them. Set a spending limit with your provider, because anyone who can open the site can use the model.
+
+What the AI does in the app:
+
+- Streams Markdown replies (headings, lists, tables, links) with a Stop button and Try again on errors
+- Writes code in highlighted blocks with **Copy**, **Download** and **Preview** (HTML and SVG run live in a sandboxed frame); longer code is saved to Artifacts
+- Reads attached text files (code, CSV, Markdown, JSON …) and knows the file list of an opened folder
+- Uses your Settings: response mode, style, reply language, custom instructions and display name
+- Images come from the free Flux model (Pollinations); videos animate an AI keyframe. Both fall back to the built-in canvas renderer when offline
+- People can still plug in their own key or a local LM Studio / Ollama model from the model menu (“Use your own model”)
+
+Opened as a local file or in a preview without the `api/` functions, the app shows clearly marked sample replies instead.
 
 ## Files
 - `index.html` — markup for the studio and the shared app shell
 - `assets/styles.css` — shared layout plus the Glass, Clay and Cyber skins
 - `assets/app.js` — all behavior
+- `api/` — Vercel functions for live AI chat
 - `assets/logo/` — logo mark (core + six per-skin variants) and wordmark as SVG
