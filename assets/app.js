@@ -19,7 +19,7 @@
     clay: { name: 'Clay', label: 'Claymorphism' },
     cyber: { name: 'Cyber', label: 'Cybersecurity' },
     nebula: { name: 'Nebula', label: 'AI purple' },
-    gold: { name: 'Gold', label: 'Premium' },
+    gold: { name: 'Gold', label: 'Quiet luxury' },
     matte: { name: 'Matte', label: 'Matte black · Red' },
   };
   const DEFAULT_BRAND = { name: 'GAS Agent', tagline: 'Assistant' };
@@ -673,36 +673,6 @@
     return { init, listen };
   })();
 
-  /* ---------------- Gold: drifting gold dust ---------------- */
-  const Dust = (() => {
-    let cv, ctx, W = 0, H = 0, dpr = 1, parts = [], started = false, t = 0;
-    function init() {
-      if (started) return; started = true;
-      cv = $('#goldDust'); if (!cv) return; ctx = cv.getContext('2d');
-      for (let i = 0; i < 80; i++) parts.push({ x: Math.random(), y: Math.random(), r: .4 + Math.random() * 1.7, vy: .00012 + Math.random() * .0005, vx: (Math.random() - .5) * .00012, tw: Math.random() * 6.28, a: .25 + Math.random() * .6 });
-      requestAnimationFrame(frame);
-    }
-    function frame() {
-      requestAnimationFrame(frame);
-      if (document.body.dataset.skin !== 'gold' || document.hidden) return;
-      dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
-      if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; }
-      t += .016; ctx.clearRect(0, 0, W, H);
-      for (const p of parts) {
-        if (!reduced) { p.y -= p.vy; p.x += p.vx + Math.sin(t + p.tw) * .00008; }
-        if (p.y < -.02) { p.y = 1.02; p.x = Math.random(); }
-        const x = p.x * W, y = p.y * H, a = p.a * (.45 + .55 * Math.sin(t * 1.6 + p.tw)), r = p.r * dpr;
-        ctx.fillStyle = `rgba(244,214,128,${a})`; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
-        if (p.r > 1.6 && a > .5) {
-          ctx.strokeStyle = `rgba(255,240,200,${(a - .5) * 1.4})`; ctx.lineWidth = .7 * dpr;
-          ctx.beginPath(); ctx.moveTo(x - r * 4, y); ctx.lineTo(x + r * 4, y); ctx.moveTo(x, y - r * 4); ctx.lineTo(x, y + r * 4); ctx.stroke();
-        }
-      }
-    }
-    return { init };
-  })();
-
   /* ---------------- Matte: slow red light trails ----------------
      Thin ribbons drift across the lower part of the screen; a red light
      travels along each one with a fading tail, like long-exposure tail-lights. */
@@ -801,7 +771,6 @@
     $('#skinName').textContent = SKINS[id].name;
     if (changed) log(`Switched to ${SKINS[id].name} interface`);
     if (id === 'nebula') Core.init();
-    if (id === 'gold') Dust.init();
     if (id === 'matte') Trails.init();
     if (id === 'cyber') { startClock(); if (!bootedCyber) { bootedCyber = true; boot(); } } else stopClock();
   }
