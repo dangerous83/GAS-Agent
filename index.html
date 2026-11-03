@@ -60,6 +60,10 @@
   <symbol id="i-archive" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></symbol>
   <symbol id="i-move" viewBox="0 0 24 24"><path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1M2 13h10M9 16l3-3-3-3"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.56-2.5 5.56-5.55C21.96 6.01 17.46 2 12 2z"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
 </svg>
 
@@ -263,6 +267,7 @@
     </div>
 
     <div class="side-foot">
+      <button class="plan-chip" id="planChip" data-action="upgrade"><span class="pc-ico"><svg class="ico"><use href="#i-spark"/></svg></span><span class="pc-text"><b id="planName">Free plan</b><small>More messages, images and video</small></span><span class="pc-cta" id="planCta">Upgrade</span></button>
       <button class="nav-item" data-action="open-folder"><span class="ni-ico"><svg class="ico"><use href="#i-folder"/></svg></span><span>Open local folder</span></button>
       <button class="nav-item" data-action="tour"><span class="ni-ico"><svg class="ico"><use href="#i-compass"/></svg></span><span>Guide &amp; tour</span></button>
       <button class="nav-item" data-action="settings"><span class="ni-ico"><svg class="ico"><use href="#i-settings"/></svg></span><span>Settings</span></button>
@@ -411,34 +416,17 @@
   </div>
 </div>
 
-<!-- Settings modal -->
-<div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="sm-h" hidden>
-  <div class="modal-card">
-    <header class="modal-head">
-      <div><h2 id="sm-h">Settings</h2><p>Brand, interface and model for this browser.</p></div>
-      <button class="icon-btn" data-action="close-modal" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
-    </header>
-    <form id="settingsForm" class="modal-body" autocomplete="off">
-      <div class="field"><label for="setName">Product name</label><input id="setName" maxlength="28"></div>
-      <div class="field"><label for="setTag">Subtitle</label><input id="setTag" maxlength="32"></div>
-      <fieldset class="skin-pick">
-        <legend>Interface</legend>
-        <label><input type="radio" name="skin" value="glass"><span class="sp sp-glass"></span>Glass</label>
-        <label><input type="radio" name="skin" value="clay"><span class="sp sp-clay"></span>Clay</label>
-        <label><input type="radio" name="skin" value="cyber"><span class="sp sp-cyber"></span>Cyber</label>
-        <label><input type="radio" name="skin" value="nebula"><span class="sp sp-nebula"></span>Nebula</label>
-        <label><input type="radio" name="skin" value="gold"><span class="sp sp-gold"></span>Gold</label>
-        <label><input type="radio" name="skin" value="matte"><span class="sp sp-matte"></span>Matte</label>
-      </fieldset>
-      <div class="set-model">
-        <div><b>Model</b><small id="setModelState">Not connected</small></div>
-        <button type="button" class="btn-ghost" id="setModelBtn">Set up</button>
-      </div>
-      <div class="modal-actions spread">
-        <button type="button" class="btn-ghost danger" id="resetDemo">Clear chats</button>
-        <span><button type="button" class="btn-ghost" data-action="close-modal">Cancel</button> <button type="submit" class="btn-primary">Save</button></span>
-      </div>
-    </form>
+<!-- Settings -->
+<div class="modal settings-modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="sm-h" hidden>
+  <div class="modal-card set-card">
+    <header class="set-head"><h2 id="sm-h">Settings</h2><button class="icon-btn" data-action="close-modal" aria-label="Close settings"><svg class="ico"><use href="#i-x"/></svg></button></header>
+    <div class="set-layout">
+      <aside class="set-side">
+        <label class="search-field set-search"><svg class="ico"><use href="#i-search"/></svg><input id="setSearch" type="search" placeholder="Search" aria-label="Search settings"></label>
+        <nav class="set-nav" id="setNav" aria-label="Settings sections"></nav>
+      </aside>
+      <div class="set-body" id="setBody"></div>
+    </div>
   </div>
 </div>
 

@@ -7,7 +7,7 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const icon = (id, cls = '') => `<svg class="ico ${cls}"><use href="#i-${id}"/></svg>`;
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem('gas:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -69,7 +69,7 @@
   state.current = null;
 
   const save = () => {
-    store.set('convos', state.convos.slice(0, 40));
+    if (!state.prefs || state.prefs.saveHistory) store.set('convos', state.convos.slice(0, 40));
     store.set('artifacts_v2', state.artifacts.slice(0, 40));
     if (state.projects) store.set('projects', state.projects.map(({ id, ico, c, title, text, foot }) => ({ id, ico, c, title, text, foot })));
   };
@@ -740,7 +740,8 @@
     return h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   }
   function paintGreeting() {
-    const g = greeting();
+    const name = ((state.prefs && state.prefs.displayName) || '').trim().split(/\s+/)[0];
+    const g = greeting() + (name ? `, ${name}` : '');
     const el = $('#greetText');
     el.textContent = g; el.dataset.text = g;
   }
@@ -1082,6 +1083,9 @@
 
     const wantsVideo = /\b(video|clip|animation|animate|movie|footage|reel)\b/.test(t);
     const wantsImage = !wantsVideo && /\b(image|images|picture|photo|illustration|draw|drawing|render|wallpaper|artwork|poster|logo|painting)\b/.test(t);
+    if ((wantsVideo && !state.prefs.capVideo) || (wantsImage && !state.prefs.capImages)) {
+      return [{ type: 'note', text: `${wantsVideo ? 'Video' : 'Image'} generation is turned off. Turn it on in Settings → Capabilities.` }];
+    }
     if (wantsVideo || wantsImage) {
       const spec = { kind: wantsVideo ? 'video' : 'image', prompt: text, seed: Gen.hash(text + now()) };
       const name = Gen.title(text);
@@ -1132,7 +1136,7 @@
       B.push({ type: 'list', items: ['Clarify the goal and what a good result looks like', 'Gather what I need from your workspace files', 'Draft the result and save it where you can find it'] });
       B.push({ type: 'p', text: state.auto ? 'Auto-approve is on, so I will go ahead with file changes without asking.' : 'I will ask before creating or changing any files. Shall I start?' });
     }
-    if (state.mode === 'Quick') return B.filter((b) => b.type !== 'list').slice(0, 3);
+    if (state.mode === 'Quick' || state.prefs.tone === 'Concise') return B.filter((b) => b.type !== 'list').slice(0, 3);
     return B;
   }
 
@@ -1181,7 +1185,7 @@
     const body = $('.body', holder);
     body.innerHTML = '';
     for (const b of blocks) {
-      if ((b.type === 'p') && !reduced) {
+      if ((b.type === 'p') && !reduced && state.prefs.streamReplies) {
         const p = document.createElement('p'); p.className = 'caret'; body.append(p);
         for (let i = 0; i <= b.text.length; i += 3) { p.textContent = b.text.slice(0, i); if (i % 30 === 0) scrollDown(true); await sleep(10); }
         p.textContent = b.text; p.classList.remove('caret');
@@ -1210,7 +1214,7 @@
     c.updated = now();
     blocks.filter((b) => b.type === 'file').forEach((b) => {
       state.artifacts = state.artifacts.filter((a) => a.name !== b.name);
-      state.artifacts.unshift({ name: b.name, kind: b.kind, meta: b.meta.split(' · saved')[0], time: now(), media: b.media });
+      state.artifacts.unshift({ name: b.name, kind: b.kind, meta: b.meta.split(' · saved')[0], time: now(), media: b.media, gen: true });
       log(`Created ${b.name}`);
     });
     save(); renderRecents();
@@ -1286,8 +1290,7 @@
     $('#modelDot').classList.toggle('on', !!m);
     $('#stModel').textContent = m ? `Model: ${m.provider}` : 'Model: none';
     $('#cyState').textContent = m ? 'link online' : 'awaiting model';
-    $('#setModelState').textContent = m ? `${m.provider} · ${m.model}` : 'Not connected';
-    $('#setModelBtn').textContent = m ? 'Disconnect' : 'Set up';
+    if (!$('#settingsModal').hidden) renderSettings();
   }
 
   /* ---------------- Modals, popovers, palette ---------------- */
@@ -1375,7 +1378,9 @@
       { g: 'Actions', label: 'Open local folder', ico: 'folder', run: pickFolder },
       { g: 'Actions', label: 'Generate an image', ico: 'image', run: () => { newChat(); $('#prompt').value = 'Generate an image of '; autosize(); } },
       { g: 'Actions', label: 'Create a video', ico: 'video', run: () => { newChat(); $('#prompt').value = 'Create a 6-second video of '; autosize(); } },
-      { g: 'Actions', label: 'Settings', ico: 'settings', run: openSettings },
+      { g: 'Actions', label: 'Settings', ico: 'settings', run: () => openSettings() },
+      { g: 'Actions', label: 'Upgrade plan', ico: 'spark', hint: 'Billing', run: () => openSettings('billing') },
+      { g: 'Actions', label: 'Usage', ico: 'gauge', run: () => openSettings('usage') },
       { g: 'Actions', label: 'Guide & tour', ico: 'compass', run: startTour },
       ...Object.entries(SECTIONS).map(([k, s]) => ({ g: 'Go to', label: s.title, ico: s.icon, run: () => showSection(k) })),
       ...Object.entries(SKINS).map(([k, s]) => ({ g: 'Interface', label: `${s.name} interface`, ico: 'layers', hint: s.label, run: () => { location.hash = k; } })),
@@ -1402,25 +1407,341 @@
   }
   function palRun(i) { const c = palItems[i]; if (!c) return; closeModals(); c.run(); }
 
-  /* Settings */
-  function openSettings() {
-    $('#setName').value = state.brand.name;
-    $('#setTag').value = state.brand.tagline;
-    $$('#settingsForm [name=skin]').forEach((r) => { r.checked = r.value === state.skin; });
-    paintModel();
-    openModal('settingsModal');
+  /* ---------------- Settings center ----------------
+     Left: searchable section list. Right: rows of label + description +
+     control. Every change saves immediately to this browser. Billing has
+     PHP plans with a Monthly / Annual switch and a test-mode checkout. */
+  const PREF_DEFAULTS = {
+    displayName: '', email: '', language: 'English',
+    fontSize: 'Default', reduceMotion: false, sidebarStart: 'Expanded',
+    defaultMode: 'Normal', autoApproveDefault: false, streamReplies: true,
+    capImages: true, capVideo: true, capFiles: true, capWeb: false, capCode: false,
+    notifScheduled: true, notifTeam: true, notifEmail: false, notifSound: false,
+    saveHistory: true, analytics: false,
+    instructions: '', tone: 'Balanced', replyLanguage: 'Match my message',
+    branchPrefix: 'gas', labelSessions: true, transcriptView: 'Normal', autoPR: false, prDraft: true, autoFix: false,
+  };
+  state.prefs = Object.assign({}, PREF_DEFAULTS, store.get('prefs', {}));
+  state.billing = Object.assign({ plan: 'free', cycle: 'monthly', renews: null, invoices: [] }, store.get('billing', {}));
+  const savePrefs = () => store.set('prefs', state.prefs);
+  const saveBilling = () => store.set('billing', state.billing);
+
+  const PLANS = [
+    { id: 'free', name: 'Free', blurb: 'For trying the agent with your own key or a local model.', monthly: 0, annual: 0,
+      features: ['50 messages a month', '10 images and 2 videos a month', '1 project', 'Bring your own model key'], limits: { messages: 50, images: 10, videos: 2, storage: 100 } },
+    { id: 'pro', name: 'Pro', blurb: 'For people who use the agent every day.', monthly: 499, annual: 4990, popular: true,
+      features: ['2,000 messages a month', '500 images and 50 videos a month', 'Unlimited projects', 'Scheduled tasks and agents', 'Priority speed'], limits: { messages: 2000, images: 500, videos: 50, storage: 10240 } },
+    { id: 'team', name: 'Team', blurb: 'For teams sharing projects, agents and files.', monthly: 1299, annual: 12990, perSeat: true,
+      features: ['Everything in Pro', '5,000 messages per member', 'Team room and shared projects', 'Admin controls and roles', 'Central billing'], limits: { messages: 5000, images: 1500, videos: 150, storage: 51200 } },
+  ];
+  const peso = (n) => '₱' + n.toLocaleString('en-PH');
+  const planById = (id) => PLANS.find((p) => p.id === id) || PLANS[0];
+  const fmtDate = (t) => new Date(t).toLocaleDateString('en-PH', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const SET_SECTIONS = [
+    { id: 'account', label: 'Account', icon: 'user', rows: [
+      { type: 'input', key: 'displayName', label: 'Display name', desc: 'How the agent addresses you.', placeholder: 'Your name' },
+      { type: 'input', key: 'email', label: 'Email', desc: 'Used for receipts and email notifications.', placeholder: 'you@company.com', inputType: 'email' },
+      { type: 'select', key: 'language', label: 'Interface language', desc: 'Language for menus and labels.', options: ['English', 'Filipino', 'Español', 'العربية'] },
+      { type: 'plan-summary' },
+    ] },
+    { id: 'billing', label: 'Billing', icon: 'card', rows: [{ type: 'billing' }] },
+    { id: 'usage', label: 'Usage', icon: 'gauge', rows: [{ type: 'usage' }] },
+    { sep: true },
+    { id: 'appearance', label: 'Appearance', icon: 'palette', rows: [
+      { type: 'skins', label: 'Interface', desc: 'Choose one of the six white-label interfaces.' },
+      { type: 'brand', key: 'name', label: 'Product name', desc: 'Replaces “GAS Agent” everywhere.' },
+      { type: 'brand', key: 'tagline', label: 'Subtitle', desc: 'Shown under the product name.' },
+      { type: 'segment', key: 'fontSize', label: 'Text size', desc: 'Scale text and controls.', options: ['Small', 'Default', 'Large'] },
+      { type: 'toggle', key: 'reduceMotion', label: 'Reduce motion', desc: 'Turn off background animation and transitions.' },
+    ] },
+    { id: 'model', label: 'Model', icon: 'cpu', rows: [
+      { type: 'model' },
+      { type: 'segment', key: 'defaultMode', label: 'Default response mode', desc: 'Mode new chats start in.', options: ['Normal', 'Plan', 'Quick'] },
+      { type: 'toggle', key: 'autoApproveDefault', label: 'Auto-approve by default', desc: 'Let the agent create and change files without asking first.' },
+      { type: 'toggle', key: 'streamReplies', label: 'Stream replies', desc: 'Show replies word by word as they are written.' },
+    ] },
+    { id: 'capabilities', label: 'Capabilities', icon: 'layers', rows: [
+      { type: 'toggle', key: 'capImages', label: 'Image generation', desc: 'Create images from a description.' },
+      { type: 'toggle', key: 'capVideo', label: 'Video generation', desc: 'Create short looping video clips.' },
+      { type: 'toggle', key: 'capFiles', label: 'Workspace files', desc: 'Read files in the folder you open.' },
+      { type: 'toggle', key: 'capWeb', label: 'Web search', desc: 'Look things up online when a model is connected.' },
+      { type: 'toggle', key: 'capCode', label: 'Code execution', desc: 'Run code in a sandbox to check results.' },
+    ] },
+    { id: 'notifications', label: 'Notifications', icon: 'bell', rows: [
+      { type: 'toggle', key: 'notifScheduled', label: 'Scheduled task finished', desc: 'Tell me when a scheduled task completes.' },
+      { type: 'toggle', key: 'notifTeam', label: 'Team room activity', desc: 'Mentions and shared chats from teammates.' },
+      { type: 'toggle', key: 'notifEmail', label: 'Email summaries', desc: 'A weekly email of what your agents did.' },
+      { type: 'toggle', key: 'notifSound', label: 'Sound', desc: 'Play a short sound when a reply finishes.' },
+    ] },
+    { id: 'privacy', label: 'Privacy', icon: 'shield', rows: [
+      { type: 'toggle', key: 'saveHistory', label: 'Save chat history', desc: 'Keep chats in this browser after you close the tab.' },
+      { type: 'toggle', key: 'analytics', label: 'Share usage analytics', desc: 'Send anonymous usage counts to help improve the product.' },
+      { type: 'action', label: 'Export chats', desc: 'Download all chats as a JSON file.', button: 'Export', run: () => exportChats() },
+      { type: 'action', label: 'Clear all chats', desc: 'Delete every chat from this browser. This can’t be undone.', button: 'Clear chats', danger: true, run: () => clearChats() },
+    ] },
+    { sep: true },
+    { id: 'customize', label: 'Customize', icon: 'wand', rows: [
+      { type: 'textarea', key: 'instructions', label: 'Custom instructions', desc: 'What should the agent know about you and how you work?', placeholder: 'e.g. I run a small logistics company in Cebu. Keep answers short and use pesos.' },
+      { type: 'segment', key: 'tone', label: 'Response style', desc: 'How much detail replies include.', options: ['Concise', 'Balanced', 'Detailed'] },
+      { type: 'select', key: 'replyLanguage', label: 'Reply language', desc: 'Language the agent answers in.', options: ['Match my message', 'English', 'Filipino', 'Español'] },
+    ] },
+    { id: 'code', label: 'Code', icon: 'code', rows: [
+      { type: 'input', key: 'branchPrefix', label: 'Branch prefix', desc: 'Added to the start of every branch name the agent creates.', placeholder: 'gas' },
+      { type: 'toggle', key: 'labelSessions', label: 'Label sessions by status', desc: 'Mark each session as blocked, ready for review, or done.' },
+      { type: 'segment', key: 'transcriptView', label: 'Default transcript view', desc: 'How much detail new sessions show.', options: ['Normal', 'Thinking', 'Verbose'] },
+      { type: 'heading', label: 'Pull requests' },
+      { type: 'toggle', key: 'autoPR', label: 'Open pull requests automatically', desc: 'Open a pull request as soon as the agent pushes changes.' },
+      { type: 'toggle', key: 'prDraft', label: 'Open as draft', desc: 'Pull requests the agent opens start as drafts instead of ready for review.', sub: true, dependsOn: 'autoPR' },
+      { type: 'toggle', key: 'autoFix', label: 'Auto-fix pull requests', desc: 'Fix failing checks and answer review comments.' },
+    ] },
+  ];
+  let setSection = 'account', checkout = null;
+
+  function rowHTML(r) {
+    const P = state.prefs;
+    const head = (extra = '') => `<div class="set-text"><b>${esc(r.label)}</b>${r.desc ? `<small>${esc(r.desc)}</small>` : ''}${extra}</div>`;
+    const id = 'pref-' + (r.key || r.label || r.type).toString().replace(/\W+/g, '-').toLowerCase();
+    switch (r.type) {
+      case 'heading': return `<h3 class="set-heading">${esc(r.label)}</h3>`;
+      case 'input': return `<div class="set-row">${head()}<input class="set-input" id="${id}" type="${r.inputType || 'text'}" data-pref="${r.key}" value="${esc(P[r.key])}" placeholder="${esc(r.placeholder || '')}" aria-label="${esc(r.label)}"></div>`;
+      case 'brand': return `<div class="set-row">${head()}<input class="set-input" id="${id}" data-brandkey="${r.key}" value="${esc(state.brand[r.key])}" maxlength="${r.key === 'name' ? 28 : 32}" aria-label="${esc(r.label)}"></div>`;
+      case 'textarea': return `<div class="set-row stack">${head()}<textarea class="set-input set-area" id="${id}" data-pref="${r.key}" rows="4" placeholder="${esc(r.placeholder || '')}" aria-label="${esc(r.label)}">${esc(P[r.key])}</textarea></div>`;
+      case 'select': return `<div class="set-row">${head()}<select class="set-input set-select" id="${id}" data-pref="${r.key}" aria-label="${esc(r.label)}">${r.options.map((o) => `<option${o === P[r.key] ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
+      case 'toggle': {
+        const off = r.dependsOn && !P[r.dependsOn];
+        return `<div class="set-row${r.sub ? ' sub' : ''}${off ? ' disabled' : ''}">${head()}<button type="button" class="switch" role="switch" id="${id}" data-pref="${r.key}" aria-checked="${!!P[r.key]}" aria-label="${esc(r.label)}"${off ? ' disabled' : ''}></button></div>`;
+      }
+      case 'segment': return `<div class="set-row">${head()}<div class="segmented" role="radiogroup" aria-label="${esc(r.label)}">${r.options.map((o) => `<button type="button" role="radio" aria-checked="${o === P[r.key]}" data-seg="${r.key}" data-val="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
+      case 'action': return `<div class="set-row">${head()}<button type="button" class="${r.danger ? 'btn-ghost danger' : 'btn-ghost'}" data-setaction="${esc(r.label)}">${esc(r.button)}</button></div>`;
+      case 'skins': return `<div class="set-row stack">${head()}<div class="set-skins">${Object.entries(SKINS).map(([k, v]) => `<button type="button" class="set-skin${state.skin === k ? ' on' : ''}" data-skinpick="${k}"><span class="sp sp-${k}"></span><b>${v.name}</b><small>${v.label}</small></button>`).join('')}</div></div>`;
+      case 'model': {
+        const m = state.model;
+        return `<div class="set-row"><div class="set-text"><b>Model provider</b><small>${m ? `Connected to ${esc(m.provider)} · ${esc(m.model)}` : 'Not connected. Replies are samples until you connect a provider.'}</small></div><button type="button" class="${m ? 'btn-ghost' : 'btn-primary'}" data-setaction="model">${m ? 'Disconnect' : 'Set up a model'}</button></div>`;
+      }
+      case 'plan-summary': {
+        const pl = planById(state.billing.plan);
+        return `<div class="set-row"><div class="set-text"><b>Plan</b><small>${pl.name}${pl.id !== 'free' ? ` · ${state.billing.cycle === 'annual' ? 'Annual' : 'Monthly'} · renews ${fmtDate(state.billing.renews)}` : ' · upgrade any time'}</small></div><button type="button" class="${pl.id === 'free' ? 'btn-primary' : 'btn-ghost'}" data-gosec="billing">${pl.id === 'free' ? 'Upgrade' : 'Manage'}</button></div>`;
+      }
+      case 'billing': return billingHTML();
+      case 'usage': return usageHTML();
+      default: return '';
+    }
   }
-  function saveSettings(e) {
-    e.preventDefault();
-    state.brand.name = $('#setName').value.trim() || DEFAULT_BRAND.name;
-    state.brand.tagline = $('#setTag').value.trim() || DEFAULT_BRAND.tagline;
-    store.set('brand', state.brand);
-    applyBrand();
-    const skin = ($('#settingsForm [name=skin]:checked') || {}).value;
-    closeModals();
-    toast('Settings saved');
-    log(`Brand set to "${state.brand.name}"`);
-    if (skin && skin !== state.skin) location.hash = skin;
+  const rowText = (r) => [r.label, r.desc, r.type === 'billing' ? 'plan subscription upgrade monthly annual pro team free invoice payment peso php gcash maya' : '', r.type === 'usage' ? 'usage messages images videos storage limit' : '', r.type === 'model' ? 'model provider api key connect' : '', r.type === 'plan-summary' ? 'plan upgrade subscription' : '', r.type === 'skins' ? 'interface skin theme glass clay cyber nebula gold matte' : ''].join(' ').toLowerCase();
+
+  function billingHTML() {
+    const B = state.billing, cur = planById(B.plan);
+    if (checkout) return checkoutHTML();
+    const cyc = B.view || B.cycle || 'monthly';
+    const cards = PLANS.map((p) => {
+      const price = cyc === 'annual' ? p.annual : p.monthly;
+      const perMonth = cyc === 'annual' && p.annual ? Math.round(p.annual / 12) : null;
+      const isCur = p.id === B.plan && (p.id === 'free' || B.cycle === cyc);
+      const btn = isCur ? '<button type="button" class="btn-ghost" disabled>Current plan</button>'
+        : p.id === 'free' ? (B.plan === 'free' ? '<button type="button" class="btn-ghost" disabled>Current plan</button>' : '<button type="button" class="btn-ghost" data-plan="free">Switch to Free</button>')
+        : `<button type="button" class="${p.popular ? 'btn-primary' : 'btn-ghost'}" data-plan="${p.id}">${B.plan === p.id ? `Switch to ${cyc === 'annual' ? 'annual' : 'monthly'}` : `Upgrade to ${p.name}`}</button>`;
+      return `<div class="plan${p.popular ? ' popular' : ''}${isCur ? ' current' : ''}">
+        ${p.popular ? '<span class="plan-badge">Most popular</span>' : ''}
+        <h4>${p.name}</h4><p class="plan-blurb">${p.blurb}</p>
+        <div class="plan-price"><b>${peso(price)}</b><small>${price === 0 ? 'forever' : cyc === 'annual' ? `per ${p.perSeat ? 'member / ' : ''}year` : `per ${p.perSeat ? 'member / ' : ''}month`}</small></div>
+        <p class="plan-note">${perMonth ? `${peso(perMonth)}/month billed yearly · save ${peso(p.monthly * 12 - p.annual)}` : p.monthly ? 'Billed monthly · cancel any time' : 'No card needed'}</p>
+        ${btn}
+        <ul>${p.features.map((f) => `<li>${icon('check')}${esc(f)}</li>`).join('')}</ul>
+      </div>`;
+    }).join('');
+    const inv = B.invoices.length
+      ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead><tbody>${B.invoices.map((i) => `<tr><td>${fmtDate(i.date)}</td><td>${esc(i.desc)}</td><td>${peso(i.amount)}</td><td><span class="pill on">${esc(i.status)}</span></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="set-empty">No invoices yet. They appear here after you upgrade.</p>';
+    return `<div class="billing">
+      <div class="bill-current">
+        <div><small>Current plan</small><b>${cur.name}${cur.id !== 'free' ? ` · ${B.cycle === 'annual' ? 'Annual' : 'Monthly'}` : ''}</b>
+        <span>${cur.id === 'free' ? 'Free forever. Upgrade for more messages, images and video.' : `${peso(B.cycle === 'annual' ? cur.annual : cur.monthly)} ${B.cycle === 'annual' ? 'per year' : 'per month'} · renews ${fmtDate(B.renews)} · ${esc(B.method || '')}`}</span></div>
+        ${cur.id !== 'free' ? '<button type="button" class="btn-ghost danger" data-billing="cancel">Cancel subscription</button>' : ''}
+      </div>
+      <div class="cycle" role="radiogroup" aria-label="Billing cycle">
+        <button type="button" role="radio" aria-checked="${cyc === 'monthly'}" data-cycle="monthly">Monthly</button>
+        <button type="button" role="radio" aria-checked="${cyc === 'annual'}" data-cycle="annual">Annual <em>2 months free</em></button>
+      </div>
+      <div class="plans">${cards}</div>
+      <p class="set-fine">Prices in Philippine pesos (PHP), VAT inclusive. These are sample prices for this white-label build; set your own in <code>assets/app.js</code>.</p>
+      <h3 class="set-heading">Billing history</h3>
+      ${inv}
+    </div>`;
+  }
+
+  function checkoutHTML() {
+    const p = planById(checkout.plan), cyc = checkout.cycle;
+    const amount = cyc === 'annual' ? p.annual : p.monthly;
+    const methods = [['GCash', 'Pay with your GCash wallet'], ['Maya', 'Pay with your Maya wallet'], ['Card', 'Visa, Mastercard or JCB'], ['Bank transfer', 'BPI, BDO, UnionBank and more']];
+    if (checkout.done) {
+      return `<div class="checkout done"><span class="co-ok">${icon('check')}</span><h4>You’re on ${p.name}</h4>
+        <p>${peso(amount)} ${cyc === 'annual' ? 'per year' : 'per month'} · renews ${fmtDate(state.billing.renews)}. A receipt was added to your billing history.</p>
+        <button type="button" class="btn-primary" data-billing="done">Back to billing</button></div>`;
+    }
+    return `<div class="checkout">
+      <button type="button" class="co-back" data-billing="back">${icon('left')}Plans</button>
+      <h4>Upgrade to ${p.name}</h4>
+      <div class="co-grid">
+        <div class="co-summary">
+          <div class="co-line"><span>${p.name} plan · ${cyc === 'annual' ? 'Annual' : 'Monthly'}</span><b>${peso(amount)}</b></div>
+          ${cyc === 'annual' ? `<div class="co-line muted"><span>You save vs monthly</span><span>−${peso(p.monthly * 12 - p.annual)}</span></div>` : ''}
+          <div class="co-line muted"><span>VAT (12%, included)</span><span>${peso(Math.round(amount - amount / 1.12))}</span></div>
+          <div class="co-line total"><span>Due today</span><b>${peso(amount)}</b></div>
+          <small>Renews ${cyc === 'annual' ? 'every year' : 'every month'} until you cancel.</small>
+        </div>
+        <div class="co-methods" role="radiogroup" aria-label="Payment method">
+          ${methods.map(([m, d]) => `<button type="button" role="radio" class="co-method" aria-checked="${checkout.method === m}" data-method="${m}"><b>${m}</b><small>${d}</small></button>`).join('')}
+        </div>
+      </div>
+      <p class="co-test">${icon('shield')}Test mode: no payment is taken and no card details are collected. Connect a payment provider such as PayMongo or Stripe to charge real payments.</p>
+      <div class="co-actions"><button type="button" class="btn-ghost" data-billing="back">Cancel</button><button type="button" class="btn-primary" data-billing="pay"${checkout.paying ? ' disabled' : ''}>${checkout.paying ? 'Processing…' : `Pay ${peso(amount)} with ${esc(checkout.method)}`}</button></div>
+    </div>`;
+  }
+
+  function usageHTML() {
+    const lim = planById(state.billing.plan).limits;
+    const msgs = state.convos.reduce((n, c) => n + c.messages.filter((m) => m.role === 'user').length, 0);
+    const imgs = state.artifacts.filter((a) => a.kind === 'png' && a.gen).length;
+    const vids = state.artifacts.filter((a) => a.kind === 'webm' && a.gen).length;
+    let bytes = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('gas:')) bytes += (localStorage.getItem(k) || '').length * 2; } } catch { /* storage unavailable */ }
+    const mb = bytes / 1048576;
+    const meter = (label, used, max, unit = '') => {
+      const pct = Math.min(100, (used / max) * 100);
+      return `<div class="meter${pct >= 80 ? ' warn' : ''}"><div class="meter-top"><b>${label}</b><span>${unit === 'MB' ? used.toFixed(2) : used.toLocaleString()} / ${max.toLocaleString()}${unit ? ' ' + unit : ''}</span></div><div class="meter-bar"><i style="width:${Math.max(pct, 1.5)}%"></i></div></div>`;
+    };
+    const reset = new Date(); reset.setMonth(reset.getMonth() + 1, 1);
+    return `<div class="usage">
+      <p class="set-fine">${planById(state.billing.plan).name} plan · resets ${fmtDate(reset)}</p>
+      ${meter('Messages', msgs, lim.messages)}
+      ${meter('Images', imgs, lim.images)}
+      ${meter('Videos', vids, lim.videos)}
+      ${meter('Storage', mb, lim.storage, 'MB')}
+      ${state.billing.plan === 'free' ? '<div class="set-row"><div class="set-text"><b>Need more?</b><small>Pro gives you 40× more messages and 50× more images.</small></div><button type="button" class="btn-primary" data-gosec="billing">See plans</button></div>' : ''}
+    </div>`;
+  }
+
+  function renderSettings() {
+    const q = ($('#setSearch').value || '').trim().toLowerCase();
+    $('#setNav').innerHTML = SET_SECTIONS.map((s) => s.sep ? '<hr>' : `<button type="button" class="set-nav-item${!q && s.id === setSection ? ' active' : ''}" data-sec="${s.id}">${icon(s.icon)}<span>${s.label}</span>${s.id === 'billing' && state.billing.plan === 'free' ? '<em>Upgrade</em>' : ''}</button>`).join('');
+    const secs = q ? SET_SECTIONS.filter((s) => !s.sep) : SET_SECTIONS.filter((s) => s.id === setSection);
+    let html = '';
+    for (const s of secs) {
+      const rows = q ? s.rows.filter((r) => r.type !== 'heading' && (rowText(r).includes(q) || s.label.toLowerCase().includes(q))) : s.rows;
+      if (!rows.length) continue;
+      html += `<section class="set-sec"><h2>${s.label}</h2>${rows.map(rowHTML).join('')}</section>`;
+    }
+    $('#setBody').innerHTML = html || `<p class="set-empty">No settings match “${esc(q)}”.</p>`;
+    $('#setBody').scrollTop = 0;
+  }
+  function openSettings(section) {
+    if (section && typeof section === 'string') setSection = section;
+    checkout = null; $('#setSearch').value = '';
+    renderSettings(); openModal('settingsModal');
+  }
+  function setPref(key, val) {
+    state.prefs[key] = val; savePrefs(); applyPrefs(key);
+  }
+  function applyPrefs(changed) {
+    const P = state.prefs;
+    document.body.dataset.fs = P.fontSize.toLowerCase();
+    reduced = P.reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.body.classList.toggle('calm', !!P.reduceMotion);
+    if (!changed || changed === 'defaultMode') { state.mode = P.defaultMode; $('#modeName').textContent = P.defaultMode; }
+    if (!changed || changed === 'autoApproveDefault') { state.auto = !!P.autoApproveDefault; $('#autoBtn').setAttribute('aria-pressed', state.auto); }
+    if (changed === 'saveHistory' && !P.saveHistory) { try { localStorage.removeItem('gas:convos'); } catch { /* storage unavailable */ } }
+    if (changed === 'saveHistory' && P.saveHistory) save();
+  }
+  function exportChats() {
+    try {
+      const blob = new Blob([JSON.stringify(state.convos.map(({ id, title, updated, messages, pinned, archived, projectId }) => ({ id, title, updated: new Date(updated).toISOString(), pinned: !!pinned, archived: !!archived, projectId: projectId || null, messages: messages.map((m) => ({ role: m.role, text: m.text || m.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() })) })), null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = `${state.brand.name.replace(/\W+/g, '-').toLowerCase()}-chats.json`; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); toast(`Exported ${state.convos.length} chats`, 'download');
+    } catch { toast('Export was blocked by the browser.', 'x'); }
+  }
+  function clearChats() {
+    const body = $('#setBody'); const row = body.querySelector('[data-setaction="Clear all chats"]')?.closest('.set-row'); if (!row) return;
+    if (row.classList.contains('confirming')) return;
+    row.classList.add('confirming');
+    row.insertAdjacentHTML('beforeend', `<div class="set-confirm"><span>Delete all ${state.convos.length} chats?</span><button type="button" class="btn-ghost" data-confirm="no">Cancel</button><button type="button" class="btn-danger" data-confirm="yes">${icon('trash')}Delete all</button></div>`);
+  }
+
+  function bindSettings() {
+    $('#setSearch').addEventListener('input', renderSettings);
+    $('#setNav').addEventListener('click', (e) => { const b = e.target.closest('[data-sec]'); if (!b) return; setSection = b.dataset.sec; checkout = null; $('#setSearch').value = ''; renderSettings(); });
+    const body = $('#setBody');
+    body.addEventListener('input', (e) => {
+      const el = e.target;
+      if (el.dataset.pref && el.tagName !== 'SELECT') { state.prefs[el.dataset.pref] = el.value; savePrefs(); }
+      if (el.dataset.brandkey) { state.brand[el.dataset.brandkey] = el.value.trim() || DEFAULT_BRAND[el.dataset.brandkey]; store.set('brand', state.brand); applyBrand(); }
+    });
+    body.addEventListener('change', (e) => {
+      const el = e.target;
+      if (el.tagName === 'SELECT' && el.dataset.pref) { setPref(el.dataset.pref, el.value); toast('Saved'); }
+      if (el.dataset.pref && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) toast('Saved');
+      if (el.dataset.pref === 'displayName') paintGreeting();
+      if (el.dataset.brandkey) toast('Brand updated');
+    });
+    body.addEventListener('click', async (e) => {
+      const t = e.target;
+      const sw = t.closest('.switch[data-pref]');
+      if (sw && !sw.disabled) { const k = sw.dataset.pref; setPref(k, !state.prefs[k]); const scroll = body.scrollTop; renderSettings(); body.scrollTop = scroll; return; }
+      const seg = t.closest('[data-seg]');
+      if (seg) { setPref(seg.dataset.seg, seg.dataset.val); $$(`[data-seg="${seg.dataset.seg}"]`, body).forEach((b) => b.setAttribute('aria-checked', b === seg)); return; }
+      const sk = t.closest('[data-skinpick]');
+      if (sk) { location.hash = sk.dataset.skinpick; setTimeout(() => openSettings('appearance'), 60); return; }
+      const go = t.closest('[data-gosec]');
+      if (go) { setSection = go.dataset.gosec; checkout = null; $('#setSearch').value = ''; renderSettings(); return; }
+      const act = t.closest('[data-setaction]');
+      if (act) {
+        const k = act.dataset.setaction;
+        if (k === 'model') { if (state.model) { disconnectModel(); renderSettings(); } else { closeModals(); openModel(); } return; }
+        const r = SET_SECTIONS.flatMap((s) => s.rows || []).find((x) => x.label === k); r && r.run(); return;
+      }
+      const cf = t.closest('[data-confirm]');
+      if (cf) {
+        if (cf.dataset.confirm === 'yes') { const n = state.convos.length; state.convos = []; state.current = null; save(); newChat(); toast(`Deleted ${n} chats`, 'trash'); log('Cleared all chats'); }
+        renderSettings(); return;
+      }
+      const cy = t.closest('[data-cycle]');
+      if (cy) { state.billing.view = cy.dataset.cycle; renderSettings(); return; }
+      const pl = t.closest('[data-plan]');
+      if (pl) {
+        if (pl.dataset.plan === 'free') { state.billing.plan = 'free'; state.billing.renews = null; state.billing.method = ''; saveBilling(); checkout = null; toast('Switched to the Free plan'); log('Plan changed to Free'); renderSettings(); return; }
+        checkout = { plan: pl.dataset.plan, cycle: state.billing.view || 'monthly', method: 'GCash' }; renderSettings(); return;
+      }
+      const m = t.closest('[data-method]');
+      if (m) { checkout.method = m.dataset.method; renderSettings(); return; }
+      const bl = t.closest('[data-billing]');
+      if (!bl) return;
+      const a = bl.dataset.billing;
+      if (a === 'back' || a === 'done') { checkout = null; renderSettings(); return; }
+      if (a === 'pay') {
+        checkout.paying = true; renderSettings();
+        await sleep(reduced ? 50 : 1300);
+        const p = planById(checkout.plan); const amount = checkout.cycle === 'annual' ? p.annual : p.monthly;
+        const renews = new Date(); if (checkout.cycle === 'annual') renews.setFullYear(renews.getFullYear() + 1); else renews.setMonth(renews.getMonth() + 1);
+        Object.assign(state.billing, { plan: p.id, cycle: checkout.cycle, view: checkout.cycle, renews: renews.getTime(), method: checkout.method });
+        state.billing.invoices.unshift({ date: now(), desc: `${p.name} plan · ${checkout.cycle === 'annual' ? 'Annual' : 'Monthly'} (${checkout.method})`, amount, status: 'Paid · test' });
+        saveBilling(); paintPlan(); checkout.paying = false; checkout.done = true; renderSettings();
+        toast(`Upgraded to ${p.name}`, 'check'); log(`Upgraded to ${p.name} (${checkout.cycle}, test mode)`);
+        return;
+      }
+      if (a === 'cancel') {
+        const row = bl.closest('.bill-current');
+        if (!row.querySelector('.set-confirm')) row.insertAdjacentHTML('beforeend', `<div class="set-confirm"><span>Cancel ${planById(state.billing.plan).name}? You keep it until ${fmtDate(state.billing.renews)} in a real setup; in this demo it ends now.</span><button type="button" class="btn-ghost" data-billing="keep">Keep plan</button><button type="button" class="btn-danger" data-billing="confirm-cancel">Cancel plan</button></div>`);
+        return;
+      }
+      if (a === 'keep') { renderSettings(); return; }
+      if (a === 'confirm-cancel') { state.billing.plan = 'free'; state.billing.renews = null; saveBilling(); paintPlan(); toast('Subscription cancelled'); log('Subscription cancelled'); renderSettings(); }
+    });
+  }
+  function paintPlan() {
+    const p = planById(state.billing.plan);
+    $('#planName').textContent = `${p.name} plan`;
+    $('#planCta').textContent = p.id === 'free' ? 'Upgrade' : 'Manage';
+    $('#planChip').classList.toggle('paid', p.id !== 'free');
   }
 
   /* Folder & files */
@@ -1553,7 +1874,8 @@
         'close-nav': closeNav,
         'setup-model': openModel,
         'close-modal': closeModals,
-        'settings': openSettings,
+        'settings': () => openSettings(),
+        'upgrade': () => openSettings('billing'),
         'palette': openPalette,
         'tour': startTour,
         'tour-next': nextTour,
@@ -1590,11 +1912,7 @@
       const b = e.target.closest('[data-prov]'); if (!b) return;
       provSel = PROVIDERS.find((p) => p.id === b.dataset.prov); paintProv(); $('#modelError').textContent = '';
     });
-    $('#settingsForm').addEventListener('submit', saveSettings);
-    $('#setModelBtn').addEventListener('click', () => { if (state.model) disconnectModel(); else { closeModals(); openModel(); } });
-    $('#resetDemo').addEventListener('click', () => {
-      state.convos = seedConvos(); state.current = null; save(); closeModals(); newChat(); toast('Chats cleared');
-    });
+    bindSettings();
     $('#palInput').addEventListener('input', renderPalette);
     $('#palInput').addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); palMove(1); }
@@ -1625,6 +1943,8 @@
   paintLogos();
   if (store.get('collapsed', false) && !window.matchMedia('(max-width: 860px)').matches) $('#app').classList.add('collapsed');
   bind();
+  applyPrefs();
+  paintPlan();
   initStudio();
   paintModel();
   renderRecents();
