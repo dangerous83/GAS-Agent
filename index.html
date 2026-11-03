@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GAS Agent Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="GAS Agent white-label interface studio: six interfaces (Glass, Clay, Cyber, Nebula, Gold, Matte) for the same AI agent.">
+<link rel="icon" href="assets/logo/gas-agent-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Chakra+Petch:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Fredoka:wght@400..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400..700&family=Jost:wght@300..600&family=Manrope:wght@400..800&family=Nunito:wght@400..900&family=Sora:wght@300..700&family=Unbounded:wght@400..700&display=swap">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-skin="home">
+
+<!-- Icon sprite (Lucide-style strokes) -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 6.5V12l3.5 2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14M7.76 16.24a6 6 0 0 1 0-8.49M16.24 7.76a6 6 0 0 1 0 8.49M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m6 3 14 9-14 9V3z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="2"/><path d="m22 8-6 4 6 4V8z"/></symbol>
+  <symbol id="i-wand" viewBox="0 0 24 24"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72ZM14 7l3 3M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+</svg>
+
+<!-- Ambient decor for each skin -->
+<div class="decor decor-glass" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><i class="blob b4"></i><i class="grain"></i></div>
+<div class="decor decor-clay" aria-hidden="true"><i class="puff p1"></i><i class="puff p2"></i><i class="puff p3"></i><i class="puff p4"></i></div>
+<div class="decor decor-cyber" aria-hidden="true"><i class="grid"></i><i class="sweep"></i><i class="scan"></i></div>
+<div class="decor decor-nebula" aria-hidden="true"><i class="stars s1"></i><i class="stars s2"></i><i class="orb"></i><i class="ring"></i></div>
+<div class="decor decor-gold" aria-hidden="true"><i class="glow"></i></div>
+<div class="decor decor-matte" aria-hidden="true"><i class="vignette"></i><canvas class="trails" id="matteTrails"></canvas><i class="noise"></i></div>
+
+<!-- ============ WHITE-LABEL STUDIO (launcher) ============ -->
+<section id="launcher" class="studio">
+  <header class="studio-bar">
+    <a class="studio-brand" href="#" aria-label="GAS Agent Studio home">
+      <span class="logo" data-logo="34"></span>
+      <span class="studio-brand-text"><b data-brand="name">GAS Agent</b><small>White-label Studio</small></span>
+    </a>
+    <nav class="studio-links" aria-label="Interfaces">
+      <a href="#glass">Glass</a><a href="#clay">Clay</a><a href="#cyber">Cyber</a><a href="#nebula">Nebula</a><a href="#gold">Gold</a><a href="#matte">Matte</a>
+    </nav>
+  </header>
+
+  <div class="studio-hero">
+    <p class="eyebrow">Interface studio · 6 skins · 1 agent</p>
+    <h1>Choose how <span data-brand="name">GAS Agent</span> looks.</h1>
+    <p class="lede">Every skin runs the same agent: chat, image and video generation, workspace files, projects, artifacts, schedules, team room and agents. Open one to try it, then set your own brand name below.</p>
+  </div>
+
+  <div class="skin-cards">
+    <a class="skin-card sc-glass" href="#glass">
+      <div class="sc-preview">
+        <div class="mini mini-glass">
+          <i class="mb mb1"></i><i class="mb mb2"></i>
+          <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
+          <div class="m-main"><b class="m-title">Good evening</b><span class="m-card"><i></i><i class="s"></i></span><span class="m-input"><i></i></span><span class="m-chips"><i></i><i></i></span></div>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-head"><h2>Glass</h2><span class="sc-tag">Glassmorphism</span></div>
+        <p>Frosted panels float over a slow aurora. Calm and premium, with a serif greeting.</p>
+        <ul class="sc-traits"><li>Backdrop blur</li><li>Aurora light</li><li>Floating panels</li></ul>
+        <span class="sc-cta">Open Glass <svg class="ico"><use href="#i-right"/></svg></span>
+      </div>
+    </a>
+
+    <a class="skin-card sc-clay" href="#clay">
+      <div class="sc-preview">
+        <div class="mini mini-clay">
+          <i class="mp mp1"></i><i class="mp mp2"></i>
+          <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
+          <div class="m-main"><b class="m-title">Good evening</b><span class="m-card"><i></i><i class="s"></i></span><span class="m-input"><i></i></span><span class="m-chips"><i></i><i></i></span></div>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-head"><h2>Clay</h2><span class="sc-tag">Claymorphism</span></div>
+        <p>Soft, puffy controls with pastel color-coded tools. Friendly for every team member.</p>
+        <ul class="sc-traits"><li>Soft 3D depth</li><li>Pastel icons</li><li>Rounded type</li></ul>
+        <span class="sc-cta">Open Clay <svg class="ico"><use href="#i-right"/></svg></span>
+      </div>
+    </a>
+
+    <a class="skin-card sc-cyber" href="#cyber">
+      <div class="sc-preview">
+        <div class="mini mini-cyber">
+          <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
+          <div class="m-main"><b class="m-title">GOOD EVENING_</b><span class="m-card"><i></i><i class="s"></i></span><span class="m-input"><i></i></span><span class="m-chips"><i></i><i></i></span></div>
+          <span class="m-status"><i></i>SECURE CHANNEL</span>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-head"><h2>Cyber</h2><span class="sc-tag">Cybersecurity</span></div>
+        <p>A security operations console: chamfered panels, live status bar and a secure boot sequence.</p>
+        <ul class="sc-traits"><li>HUD panels</li><li>Live telemetry</li><li>Mono type</li></ul>
+        <span class="sc-cta">Open Cyber <svg class="ico"><use href="#i-right"/></svg></span>
+      </div>
+    </a>
+    <a class="skin-card sc-nebula" href="#nebula">
+      <div class="sc-preview">
+        <div class="mini mini-nebula">
+          <i class="mo"></i><i class="mn"></i>
+          <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
+          <div class="m-main"><b class="m-title">Good evening</b><span class="m-card"><i></i><i class="s"></i></span><span class="m-input"><i></i></span><span class="m-chips"><i></i><i></i></span></div>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-head"><h2>Nebula</h2><span class="sc-tag">AI purple</span></div>
+        <p>An interactive neural core you can click, drag and morph between Reason, Create, Analyze and Remember.</p>
+        <ul class="sc-traits"><li>Live neural core</li><li>Shape morphing</li><li>Purple gradients</li></ul>
+        <span class="sc-cta">Open Nebula <svg class="ico"><use href="#i-right"/></svg></span>
+      </div>
+    </a>
+
+    <a class="skin-card sc-gold" href="#gold">
+      <div class="sc-preview">
+        <div class="mini mini-gold">
+          <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
+          <div class="m-main"><b class="m-title">Good Evening</b><span class="m-rule"></span><span class="m-card"><i></i><i class="s"></i></span><span class="m-input"><i></i></span><span class="m-chips"><i></i><i></i></span></div>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-head"><h2>Gold</h2><span class="sc-tag">Quiet luxury</span></div>
+        <p>Quiet luxury: warm black, ivory type and an elegant serif, with champagne gold used only where it matters.</p>
+        <ul class="sc-traits"><li>Champagne accents</li><li>Serif display</li><li>Hairline detail</li></ul>
+        <span class="sc-cta">Open Gold <svg class="ico"><use href="#i-right"/></svg></span>
+      </div>
+    </a>
+
+    <a class="skin-card sc-matte" href="#matte">
+      <div class="sc-preview">
+        <div class="mini mini-matte"><i class="mm-trail t1"></i><i class="mm-trail t2"></i>
+          <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
+          <div class="m-main"><b class="m-title">Good evening</b><span class="m-card"><i></i><i class="s"></i></span><span class="m-input"><i></i></span><span class="m-chips"><i></i><i></i></span></div>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-head"><h2>Matte</h2><span class="sc-tag">Matte black · Red</span></div>
+        <p>Matte black surfaces with soft depth, signal-red accents and slow red light trails moving in the background.</p>
+        <ul class="sc-traits"><li>Matte black</li><li>Red accents</li><li>Light trails</li></ul>
+        <span class="sc-cta">Open Matte <svg class="ico"><use href="#i-right"/></svg></span>
+      </div>
+    </a>
+  </div>
+
+  <div class="studio-lower">
+    <section class="kit" aria-labelledby="kit-h">
+      <div class="kit-head">
+        <h3 id="kit-h">Logo</h3>
+        <p>The mark is a G drawn as a flame ring, with an orbiting node for the agent. It recolors itself for each of the six skins.</p>
+      </div>
+      <div class="kit-tiles">
+        <figure class="kit-tile kt-home"><span class="logo" data-logo="72"></span><figcaption>Core</figcaption></figure>
+        <figure class="kit-tile kt-glass"><span class="logo" data-logo="72"></span><figcaption>Glass</figcaption></figure>
+        <figure class="kit-tile kt-clay"><span class="logo" data-logo="72"></span><figcaption>Clay</figcaption></figure>
+        <figure class="kit-tile kt-cyber"><span class="logo" data-logo="72"></span><figcaption>Cyber</figcaption></figure>
+        <figure class="kit-tile kt-nebula"><span class="logo" data-logo="72"></span><figcaption>Nebula</figcaption></figure>
+        <figure class="kit-tile kt-gold"><span class="logo" data-logo="72"></span><figcaption>Gold</figcaption></figure>
+        <figure class="kit-tile kt-matte"><span class="logo" data-logo="72"></span><figcaption>Matte</figcaption></figure>
+      </div>
+      <div class="kit-wordmark">
+        <span class="logo" data-logo="52"></span>
+        <span class="wm"><b data-brand="name">GAS Agent</b><small data-brand="tagline">Assistant</small></span>
+        <button class="btn-ghost" id="copyLogo" type="button"><svg class="ico"><use href="#i-copy"/></svg>Copy SVG</button>
+      </div>
+    </section>
+
+    <section class="wl" aria-labelledby="wl-h">
+      <h3 id="wl-h">White label</h3>
+      <p>Your name replaces “GAS Agent” across all six interfaces. It is saved in this browser.</p>
+      <form id="wlForm" class="wl-form" autocomplete="off">
+        <label for="wlName">Product name</label>
+        <input id="wlName" maxlength="28" placeholder="GAS Agent">
+        <label for="wlTag">Subtitle under the name</label>
+        <input id="wlTag" maxlength="32" placeholder="Assistant">
+        <div class="wl-actions">
+          <button class="btn-solid" type="submit">Apply name</button>
+          <button class="btn-ghost" type="button" id="wlReset">Reset to GAS Agent</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <footer class="studio-foot">
+    <span><span data-brand="name">GAS Agent</span> runs on the model you choose. No account is needed.</span>
+    <span>Tip: press <kbd>Ctrl</kbd> <kbd>K</kbd> inside any interface.</span>
+  </footer>
+</section>
+
+<!-- ============ AGENT INTERFACE (shared markup, skinned by CSS) ============ -->
+<div id="app" class="app" hidden>
+  <div class="scrim" data-action="close-nav"></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <div class="side-head">
+      <div class="brand">
+        <span class="logo" data-logo="30"></span>
+        <span class="brand-text"><b class="brand-name" data-brand="name">GAS Agent</b><small class="brand-sub" data-brand="tagline">Assistant</small></span>
+      </div>
+      <button class="icon-btn" data-action="toggle-sidebar" aria-label="Collapse sidebar" title="Collapse sidebar"><svg class="ico"><use href="#i-panel"/></svg></button>
+    </div>
+
+    <div class="side-scroll">
+      <p class="side-label">Workspace</p>
+      <button class="new-chat" data-action="new-chat"><span class="nc-plus"><svg class="ico"><use href="#i-plus"/></svg></span><span>New chat</span></button>
+
+      <p class="side-label">Recents</p>
+      <label class="search-field">
+        <svg class="ico"><use href="#i-search"/></svg>
+        <input id="recentSearch" type="search" placeholder="Search conversations…" aria-label="Search conversations">
+      </label>
+      <div class="recents" id="recents"></div>
+
+      <nav class="nav" aria-label="Sections">
+        <button class="nav-item" data-section="code"><span class="ni-ico"><svg class="ico"><use href="#i-code"/></svg></span><span>Code</span></button>
+        <button class="nav-item" data-section="projects"><span class="ni-ico"><svg class="ico"><use href="#i-folder"/></svg></span><span>Projects</span></button>
+        <button class="nav-item" data-section="artifacts"><span class="ni-ico"><svg class="ico"><use href="#i-grid"/></svg></span><span>Artifacts</span><span class="ni-count" id="artifactCount"></span></button>
+        <button class="nav-item" data-section="scheduled"><span class="ni-ico"><svg class="ico"><use href="#i-clock"/></svg></span><span>Scheduled</span></button>
+        <button class="nav-item" data-section="team"><span class="ni-ico"><svg class="ico"><use href="#i-users"/></svg></span><span>Team room</span></button>
+        <button class="nav-item" data-section="agents"><span class="ni-ico"><svg class="ico"><use href="#i-radio"/></svg></span><span>Agents</span></button>
+      </nav>
+    </div>
+
+    <div class="side-foot">
+      <button class="nav-item" data-action="open-folder"><span class="ni-ico"><svg class="ico"><use href="#i-folder"/></svg></span><span>Open local folder</span></button>
+      <button class="nav-item" data-action="tour"><span class="ni-ico"><svg class="ico"><use href="#i-compass"/></svg></span><span>Guide &amp; tour</span></button>
+      <button class="nav-item" data-action="settings"><span class="ni-ico"><svg class="ico"><use href="#i-settings"/></svg></span><span>Settings</span></button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="tb-left">
+        <button class="icon-btn tb-menu" data-action="open-nav" aria-label="Open sidebar"><svg class="ico"><use href="#i-menu"/></svg></button>
+        <button class="icon-btn tb-expand" data-action="toggle-sidebar" aria-label="Expand sidebar" title="Expand sidebar"><svg class="ico"><use href="#i-panel"/></svg></button>
+        <div class="agent-id">
+          <span class="agent-badge">AI</span>
+          <span class="agent-text"><b id="viewTitle">Assistant</b><small id="viewSub">General · AI</small></span>
+        </div>
+      </div>
+      <div class="tb-right">
+        <a class="home-btn" href="#" title="Back to all interfaces"><svg class="ico"><use href="#i-left"/></svg><span>Home</span></a>
+        <button class="skin-btn" data-action="skin-menu" aria-label="Change interface" title="Change interface"><span class="sw" id="skinSw"></span><span id="skinName">Glass</span><svg class="ico sm"><use href="#i-down"/></svg></button>
+        <button class="kbd-search" data-action="palette" aria-label="Search and commands"><svg class="ico"><use href="#i-search"/></svg><span>Ctrl K</span></button>
+        <button class="icon-btn has-dot" data-action="notifications" aria-label="Notifications" id="bellBtn"><svg class="ico"><use href="#i-bell"/></svg></button>
+        <button class="icon-btn" data-action="share" aria-label="Copy link"><svg class="ico"><use href="#i-share"/></svg></button>
+        <button class="icon-btn" data-action="activity" aria-label="Activity log"><svg class="ico"><use href="#i-terminal"/></svg></button>
+      </div>
+    </header>
+
+    <!-- Chat view -->
+    <section class="view chat empty" id="chatView">
+      <div class="chat-scroll" id="chatScroll">
+        <div class="chat-inner">
+          <div class="welcome">
+            <p class="cy-prompt" aria-hidden="true">&gt; session://<span data-brand="slug">gas-agent</span>/assistant · <span id="cyState">awaiting model</span></p>
+            <div class="ai-core" id="aiCore">
+              <div class="core-stage">
+                <canvas id="coreCanvas" tabindex="0" aria-label="Interactive neural core. Click to send a pulse, drag to spin."></canvas>
+                <div class="core-hud">
+                  <span class="hud-l"><i></i><b id="coreState">Reasoning</b></span>
+                  <span class="hud-r" id="coreStats">343 neurons</span>
+                </div>
+                <span class="core-hint" id="coreHint">Click to pulse · drag to spin</span>
+              </div>
+              <div class="core-modes" role="group" aria-label="Agent modes">
+                <button type="button" class="core-mode active" data-core="reason"><svg class="ico"><use href="#i-spark"/></svg>Reason</button>
+                <button type="button" class="core-mode" data-core="create"><svg class="ico"><use href="#i-image"/></svg>Create</button>
+                <button type="button" class="core-mode" data-core="analyze"><svg class="ico"><use href="#i-sheet"/></svg>Analyze</button>
+                <button type="button" class="core-mode" data-core="remember"><svg class="ico"><use href="#i-folder"/></svg>Remember</button>
+              </div>
+              <div class="core-thought"><p id="coreThought">I break a problem into steps, weigh the options and explain my thinking.</p><button type="button" class="core-try" id="coreTry">Try it <svg class="ico sm"><use href="#i-right"/></svg></button></div>
+            </div>
+            <h1 class="greet"><span class="logo greet-logo" data-logo="40"></span><span class="greet-text" id="greetText" data-text="Good evening">Good evening</span></h1>
+            <p class="greet-sub">Your AI assistant. It can chat, work with files in your workspace, and create documents, spreadsheets, PDFs and images.</p>
+            <div class="connect-card" id="connectCard">
+              <div class="cc-ico"><svg class="ico"><use href="#i-key"/></svg></div>
+              <div class="cc-body">
+                <h2>Connect a model to get started</h2>
+                <p><span data-brand="name">GAS Agent</span> runs on the model you choose: paste an API key from a provider (OpenRouter, OpenAI, Anthropic, Gemini, …) or use a local model through LM Studio or Ollama. No account with us is needed.</p>
+                <button class="btn-primary" data-action="setup-model">Set up a model</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="thread" id="thread" aria-live="polite"></div>
+
+          <div class="composer-wrap">
+            <form class="composer" id="composer" autocomplete="off">
+              <div class="attachments" id="attachments" hidden></div>
+              <label class="sr-only" for="prompt">Message</label>
+              <textarea id="prompt" rows="1" placeholder="How can I help you today?"></textarea>
+              <div class="tools">
+                <div class="tools-l">
+                  <button type="button" class="tool sq" data-action="plus-menu" aria-label="Attach or create" title="Attach files, create images and videos"><svg class="ico"><use href="#i-plus"/></svg></button>
+                  <button type="button" class="tool" data-action="open-folder" title="Workspace folder"><svg class="ico"><use href="#i-folder"/></svg><span id="folderName">assistant</span></button>
+                  <button type="button" class="tool" data-action="mode-menu" id="modeBtn" title="Response mode"><svg class="ico"><use href="#i-pencil"/></svg><span id="modeName">Normal</span></button>
+                  <button type="button" class="tool ic" data-action="mic" id="micBtn" aria-pressed="false" aria-label="Voice input" title="Voice input"><svg class="ico"><use href="#i-mic"/></svg></button>
+                  <button type="button" class="tool ic" data-action="voice" id="voiceBtn" aria-pressed="false" aria-label="Read replies aloud" title="Read replies aloud"><svg class="ico"><use href="#i-volume"/></svg></button>
+                  <button type="button" class="tool auto" data-action="auto" id="autoBtn" aria-pressed="false" title="Let the agent act without asking"><i class="dot"></i><span>Auto-approve</span></button>
+                </div>
+                <div class="tools-r">
+                  <button type="button" class="tool model-pick" data-action="model-menu" id="modelBtn"><span class="mp-dot" id="modelDot"></span><span id="modelName">Auto</span><svg class="ico sm"><use href="#i-down"/></svg></button>
+                  <button type="submit" class="send" id="sendBtn" aria-label="Send message"><svg class="ico"><use href="#i-up"/></svg></button>
+                </div>
+              </div>
+            </form>
+            <p class="composer-note" id="composerNote">Enter to send · Shift + Enter for a new line</p>
+          </div>
+
+          <div class="suggestions" id="suggestions">
+            <button class="suggest">Draft a one-page summary of a topic I'm working on and save it as a Word document.</button>
+            <button class="suggest">Build a simple Excel tracker for my top priorities this quarter.</button>
+            <button class="suggest">Look at the files in my workspace folder and tell me what's there.</button>
+            <button class="suggest sg-media"><svg class="ico"><use href="#i-image"/></svg>Generate an image of a futuristic city at sunset.</button>
+            <button class="suggest sg-media"><svg class="ico"><use href="#i-video"/></svg>Create a 6-second video of ocean waves at night.</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section view (Code, Projects, Artifacts, …) -->
+    <section class="view section" id="sectionView" hidden>
+      <div class="section-scroll">
+        <div class="section-inner" id="sectionInner"></div>
+      </div>
+    </section>
+
+    <footer class="statusbar" aria-label="System status">
+      <span class="st-ok"><i></i>Secure channel</span>
+      <span>ENC AES-256</span>
+      <span id="stModel">Model: none</span>
+      <span id="stLatency">Latency 24 ms</span>
+      <span class="st-push" id="stClock">00:00:00 UTC</span>
+    </footer>
+  </main>
+</div>
+
+<!-- Hidden inputs -->
+<input type="file" id="fileInput" multiple hidden>
+<input type="file" id="folderInput" webkitdirectory multiple hidden>
+
+<!-- Model setup modal -->
+<div class="modal" id="modelModal" role="dialog" aria-modal="true" aria-labelledby="mm-h" hidden>
+  <div class="modal-card">
+    <header class="modal-head">
+      <div><h2 id="mm-h">Set up a model</h2><p>Pick a provider. Your key stays in this browser tab and is never saved to disk.</p></div>
+      <button class="icon-btn" data-action="close-modal" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+    </header>
+    <form id="modelForm" class="modal-body" autocomplete="off">
+      <div class="providers" id="providers" role="radiogroup" aria-label="Provider"></div>
+      <div class="field" id="keyField">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" placeholder="sk-…" spellcheck="false">
+      </div>
+      <div class="field" id="urlField" hidden>
+        <label for="baseUrl">Server address</label>
+        <input id="baseUrl" type="url" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="modelId">Model</label>
+        <input id="modelId" spellcheck="false">
+      </div>
+      <p class="form-error" id="modelError" role="alert"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-action="close-modal">Cancel</button>
+        <button type="submit" class="btn-primary">Connect</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="sm-h" hidden>
+  <div class="modal-card">
+    <header class="modal-head">
+      <div><h2 id="sm-h">Settings</h2><p>Brand, interface and model for this browser.</p></div>
+      <button class="icon-btn" data-action="close-modal" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+    </header>
+    <form id="settingsForm" class="modal-body" autocomplete="off">
+      <div class="field"><label for="setName">Product name</label><input id="setName" maxlength="28"></div>
+      <div class="field"><label for="setTag">Subtitle</label><input id="setTag" maxlength="32"></div>
+      <fieldset class="skin-pick">
+        <legend>Interface</legend>
+        <label><input type="radio" name="skin" value="glass"><span class="sp sp-glass"></span>Glass</label>
+        <label><input type="radio" name="skin" value="clay"><span class="sp sp-clay"></span>Clay</label>
+        <label><input type="radio" name="skin" value="cyber"><span class="sp sp-cyber"></span>Cyber</label>
+        <label><input type="radio" name="skin" value="nebula"><span class="sp sp-nebula"></span>Nebula</label>
+        <label><input type="radio" name="skin" value="gold"><span class="sp sp-gold"></span>Gold</label>
+        <label><input type="radio" name="skin" value="matte"><span class="sp sp-matte"></span>Matte</label>
+      </fieldset>
+      <div class="set-model">
+        <div><b>Model</b><small id="setModelState">Not connected</small></div>
+        <button type="button" class="btn-ghost" id="setModelBtn">Set up</button>
+      </div>
+      <div class="modal-actions spread">
+        <button type="button" class="btn-ghost danger" id="resetDemo">Clear chats</button>
+        <span><button type="button" class="btn-ghost" data-action="close-modal">Cancel</button> <button type="submit" class="btn-primary">Save</button></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Command palette -->
+<div class="modal palette" id="palette" role="dialog" aria-modal="true" aria-label="Search and commands" hidden>
+  <div class="modal-card">
+    <label class="pal-search"><svg class="ico"><use href="#i-search"/></svg><input id="palInput" placeholder="Search chats, sections and commands…" aria-label="Search"><kbd>Esc</kbd></label>
+    <ul class="pal-list" id="palList" role="listbox"></ul>
+  </div>
+</div>
+
+<!-- Media viewer -->
+<div class="modal lightbox" id="lightbox" role="dialog" aria-modal="true" aria-labelledby="lb-h" hidden>
+  <div class="modal-card">
+    <header class="modal-head">
+      <div><h2 id="lb-h">Preview</h2><p id="lbMeta"></p></div>
+      <button class="icon-btn" data-action="close-modal" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="lb-stage" id="lbStage"></div>
+    <div class="modal-actions lb-actions" id="lbActions"></div>
+  </div>
+</div>
+
+<!-- Popover, drawer, tour, toast, boot -->
+<div class="popover" id="popover" hidden></div>
+<aside class="drawer" id="activity" aria-label="Activity log" hidden>
+  <header class="drawer-head"><b>Activity</b><button class="icon-btn" data-action="activity" aria-label="Close activity"><svg class="ico"><use href="#i-x"/></svg></button></header>
+  <ol class="log" id="log"></ol>
+</aside>
+<div class="tour" id="tour" hidden>
+  <div class="tour-ring" id="tourRing"></div>
+  <div class="tour-pop" id="tourPop" role="dialog" aria-live="polite">
+    <small id="tourStep"></small><h3 id="tourTitle"></h3><p id="tourText"></p>
+    <div class="tour-actions"><button class="btn-ghost" data-action="tour-end">Skip</button><button class="btn-primary" data-action="tour-next" id="tourNext">Next</button></div>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="boot" id="boot" hidden><pre id="bootLog"></pre></div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
