@@ -13,6 +13,22 @@ A white-label front end for the GAS Agent platform with **six complete interface
 
 Open `index.html` in a browser (no build step) to see the studio launcher and pick a skin.
 
+## Deploy to Vercel
+
+This is a static site, so Vercel needs no build settings.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdangerous83%2FGAS-Agent)
+
+Or connect it by hand:
+
+1. Go to https://vercel.com/new and choose **Import Git Repository**, then pick `dangerous83/GAS-Agent`.
+2. Leave **Framework Preset** as *Other*, and leave Build Command and Output Directory empty.
+3. Click **Deploy**.
+
+Every push then deploys automatically: the production branch goes to your main URL and every other branch gets its own preview URL. Direct links to each interface work on the deployed site too, for example `https://<your-project>.vercel.app/#gold`.
+
+`vercel.json` turns on clean URLs and adds basic security headers. It allows the microphone for the voice-input button.
+
 ## What works in every skin
 - Sidebar: New chat, searchable Recents, Code, Projects, Artifacts, Scheduled, Team room, Agents, Open local folder, Guide & tour, Settings
 - **Home** button and interface menu in every skin to go back to the studio or switch skins
