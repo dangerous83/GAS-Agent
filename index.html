@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GAS Agent</title>
+<title>GAS Agent · Your AI workspace</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="GAS Agent: an AI workspace with job models (Accountant, Tax Associate, Finance, Legal, Marketing, Sales, HR, Operations, Developer, Agronomist) and seven interfaces.">
+<meta name="description" content="GAS Agent: an AI workspace with job models (Accountant, Tax Associate, Finance, Legal, Marketing, Sales, HR, Operations, Developer, Agronomist) for everyday work.">
 <link rel="icon" href="assets/logo/gas-agent-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Chakra+Petch:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Fredoka:wght@400..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400..700&family=Jost:wght@300..600&family=Manrope:wght@400..800&family=Nunito:wght@400..900&family=Sora:wght@300..700&family=Unbounded:wght@400..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Chakra+Petch:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Fredoka:wght@400..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400..700&family=Jost:wght@300..600&family=Inter:wght@400..800&family=Manrope:wght@400..800&family=Nunito:wght@400..900&family=Sora:wght@300..700&family=Unbounded:wght@400..700&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
 <link rel="stylesheet" href="assets/pro.css">
 </head>
@@ -121,7 +121,7 @@
       <div class="sc-preview">
         <div class="mini mini-pro">
           <div class="m-side"><span class="m-logo"></span><i></i><i></i><i class="s"></i><i></i><i></i><i></i></div>
-          <div class="m-main"><b class="m-title">What will you create today?</b><span class="m-input"><i></i></span><span class="m-tiles"><i></i><i></i><i></i><i></i></span><span class="m-work"><i></i><i></i><i></i></span></div>
+          <div class="m-main"><b class="m-title">What would you like to get done?</b><span class="m-input"><i></i></span><span class="m-tiles"><i></i><i></i><i></i><i></i></span><span class="m-work"><i></i><i></i><i></i></span></div>
         </div>
       </div>
       <div class="sc-body">
@@ -289,7 +289,7 @@
 
       <nav class="nav pro-nav pro-only" aria-label="Workspace">
         <p class="side-label">Workspace</p>
-        <button class="nav-item" data-action="overview" data-pro-nav="overview"><span class="ni-ico"><svg class="ico"><use href="#i-home"/></svg></span><span>Overview</span></button>
+        <button class="nav-item" data-action="overview" data-pro-nav="overview"><span class="ni-ico"><svg class="ico"><use href="#i-home"/></svg></span><span>Home</span></button>
         <button class="nav-item" data-section="projects"><span class="ni-ico"><svg class="ico"><use href="#i-folder"/></svg></span><span>Projects</span></button>
         <button class="nav-item" data-section="artifacts"><span class="ni-ico"><svg class="ico"><use href="#i-grid"/></svg></span><span>Artifacts</span><span class="ni-count" data-pro-count="artifacts"></span></button>
         <button class="nav-item" data-section="code"><span class="ni-ico"><svg class="ico"><use href="#i-code"/></svg></span><span>Code</span></button>
@@ -330,7 +330,7 @@
       <div class="tb-left">
         <button class="icon-btn tb-menu" data-action="open-nav" aria-label="Open sidebar"><svg class="ico"><use href="#i-menu"/></svg></button>
         <button class="icon-btn tb-expand" data-action="toggle-sidebar" aria-label="Expand sidebar" title="Expand sidebar"><svg class="ico"><use href="#i-panel"/></svg></button>
-        <nav class="crumbs pro-only" aria-label="Breadcrumb"><button type="button" data-action="overview">Workspace</button><span aria-hidden="true">/</span><b id="crumbHere">Overview</b></nav>
+        <nav class="crumbs pro-only" aria-label="Breadcrumb"><button type="button" data-action="overview">Workspace</button><span aria-hidden="true">/</span><b id="crumbHere">Home</b></nav>
         <div class="agent-id pro-hide">
           <span class="agent-badge">AI</span>
           <span class="agent-text"><b id="viewTitle">Assistant</b><small id="viewSub">General · AI</small></span>
@@ -370,9 +370,9 @@
               <div class="core-thought"><p id="coreThought">I break a problem into steps, weigh the options and explain my thinking.</p><button type="button" class="core-try" id="coreTry">Try it <svg class="ico sm"><use href="#i-right"/></svg></button></div>
             </div>
             <div class="pro-hero pro-only">
-              <span class="ph-pill">Your AI workspace</span>
-              <h1 class="ph-title">What will you create today?</h1>
-              <p class="ph-sub">Think, build and get work done with <span data-brand="name">GAS Agent</span>.</p>
+              <span class="ph-pill">A little clarity. A lot of possibility.</span>
+              <h1 class="ph-title">What would you like to get done?</h1>
+              <p class="ph-sub">Choose an assistant. Share an idea. Let’s make progress.</p>
             </div>
             <h1 class="greet pro-hide"><span class="logo greet-logo" data-logo="40"></span><span class="greet-text" id="greetText" data-text="Good evening">Good evening</span></h1>
             <p class="greet-sub pro-hide">Your AI assistant. It can chat, work with files in your workspace, and create documents, spreadsheets, PDFs and images.</p>
@@ -381,6 +381,7 @@
           <div class="thread" id="thread" aria-live="polite"></div>
 
           <div class="composer-wrap">
+            <div class="assistant-bar pro-only"><span class="assistant-label">Your assistant</span><button type="button" class="tool role-pick pro-only" data-action="role-menu" id="roleBtn" aria-haspopup="menu" title="Choose your assistant"><svg class="ico" id="roleIco"><use href="#i-calc"/></svg><span id="roleName">Accountant</span><svg class="ico sm"><use href="#i-down"/></svg></button><button type="button" class="job-badge pro-only" data-action="job-menu" title="What this assistant can help with">About assistant</button></div>
             <form class="composer" id="composer" autocomplete="off">
               <div class="attachments" id="attachments" hidden></div>
               <label class="sr-only" for="prompt">Message</label>
@@ -390,8 +391,6 @@
                   <button type="button" class="tool sq" data-action="plus-menu" aria-label="Attach or create" title="Attach files, create images and videos"><svg class="ico"><use href="#i-plus"/></svg></button>
                   <button type="button" class="tool" data-action="open-folder" title="Workspace folder"><svg class="ico"><use href="#i-folder"/></svg><span id="folderName">Workspace</span></button>
                   <span class="tool-sep pro-only" aria-hidden="true"></span>
-                  <button type="button" class="tool role-pick pro-only" data-action="role-menu" id="roleBtn" aria-haspopup="menu" title="Job model: choose a role"><svg class="ico" id="roleIco"><use href="#i-calc"/></svg><span id="roleName">Accountant</span><svg class="ico sm"><use href="#i-down"/></svg></button>
-                  <button type="button" class="job-badge pro-only" data-action="job-menu" title="What this job model does">Job model</button>
                   <button type="button" class="tool pro-hide" data-action="mode-menu" id="modeBtn" title="Response mode"><svg class="ico"><use href="#i-pencil"/></svg><span id="modeName">Normal</span></button>
                   <button type="button" class="tool ic" data-action="mic" id="micBtn" aria-pressed="false" aria-label="Voice input" title="Voice input"><svg class="ico"><use href="#i-mic"/></svg></button>
                   <button type="button" class="tool ic pro-hide" data-action="voice" id="voiceBtn" aria-pressed="false" aria-label="Read replies aloud" title="Read replies aloud"><svg class="ico"><use href="#i-volume"/></svg></button>
@@ -418,7 +417,7 @@
               <div class="pro-work" id="proWork"></div>
             </section>
 
-            <section class="pro-kit" id="proKit" aria-labelledby="pk-h"></section>
+            <details class="assistant-toolbox"><summary><span><svg class="ico"><use href="#i-sliders"/></svg> Assistant tools</span><small>Calculators, templates &amp; more</small><svg class="ico sm"><use href="#i-down"/></svg></summary><section class="pro-kit" id="proKit" aria-labelledby="pk-h"></section></details>
 
             <p class="pro-foot"><span data-brand="name">GAS Agent</span> can make mistakes. Review important outputs.</p>
           </div>
