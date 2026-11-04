@@ -530,7 +530,7 @@
   const roleById = (id) => ALL.find((r) => r.id === id);
 
   /* ---------------- State ---------------- */
-  let A = null; let roleId = 'accountant'; let painted = ''; let showAll = false;
+  let A = null; let roleId = 'general'; let painted = ''; let showAll = false;
   // 'overview' = the workspace home; 'chat' = a clean New chat screen.
   let mode = 'overview'; let toOverview = false;
   const activeTool = {}; let vals = {};
@@ -545,10 +545,10 @@
   /* ---------------- Rendering ---------------- */
   function paintRole() {
     const r = role();
-    A.$('#roleName').textContent = r.id === 'general' ? 'General' : r.name;
+    A.$('#roleName').textContent = r.name;
     A.$('#roleIco use').setAttribute('href', `#i-${r.ico}`);
-    A.$('#roleBtn').title = `Job model: ${r.name}. Click to change.`;
-    A.$('#prompt').placeholder = 'Ask anything, or describe a task…';
+    A.$('#roleBtn').title = `Your assistant: ${r.name}. Click to change.`;
+    A.$('#prompt').placeholder = 'Describe your task, or share an idea…';
   }
 
   function renderTasks(animate) {
@@ -580,7 +580,7 @@
       <div class="pk-banner">
         <img src="assets/img/cubes.webp" alt="" loading="lazy" decoding="async">
         <div class="pk-banner-in">
-          <span class="pk-badge">${A.icon(r.ico, 'sm')}${A.esc(r.id === 'general' ? 'General assistant' : 'Job model · ' + r.name)}</span>
+          <span class="pk-badge">${A.icon(r.ico, 'sm')}${A.esc(r.id === 'general' ? 'General assistant' : 'Your assistant · ' + r.name)}</span>
           <h2 id="pk-h">${A.esc(r.id === 'general' ? 'Quick tools' : r.name + ' tools')}</h2>
           <p>Pick a tool, type your numbers, and the answer appears instantly. No sign-up or formulas needed.</p>
         </div>
@@ -690,7 +690,7 @@
   function paintChrome() {
     const st = A.state; const c = A.current();
     const empty = st.section === 'chat' && !(c && c.messages.length);
-    const here = st.section !== 'chat' ? SEC_NAMES[st.section] || 'Workspace' : !empty ? c.title : mode === 'chat' ? 'New chat' : 'Overview';
+    const here = st.section !== 'chat' ? SEC_NAMES[st.section] || 'Workspace' : !empty ? c.title : mode === 'chat' ? 'New chat' : 'Home';
     A.$('#crumbHere').textContent = here;
     A.$('[data-pro-nav="overview"]').classList.toggle('active', empty && mode === 'overview');
     A.$('.new-chat').classList.toggle('on', empty && mode === 'chat');
@@ -704,13 +704,14 @@
   /* ---------------- Menus ---------------- */
   function roleMenu(anchor) {
     const item = (r) => `<button class="pop-item role-item${r.id === roleId ? ' on' : ''}" data-pick="${r.id}" role="menuitemradio" aria-checked="${r.id === roleId}">${A.icon(r.ico)}<span><b>${A.esc(r.name)}</b></span>${r.id === roleId ? A.icon('check', 'chk') : ''}</button>`;
-    A.popover(anchor, `<div class="role-menu" role="menu" aria-label="Job model">${ROLES.map(item).join('')}<div class="pop-sep"></div>${item(GENERAL)}</div>`, (v) => setRole(v));
+    const groups = [['Finance', ['accountant', 'tax', 'finance']], ['Business', ['marketing', 'sales', 'hr', 'operations']], ['Specialists', ['legal', 'developer', 'agronomist']]];
+    A.popover(anchor, `<div class="role-menu" role="menu" aria-label="Choose your assistant">${item(GENERAL)}${groups.map(([label, ids]) => `<p class="pop-title">${label}</p>${ids.map(id => item(roleById(id))).join('')}`).join('')}</div>`, (v) => setRole(v));
     const pop = A.$('#popover');
     if (!pop.hidden) { const sel = A.$('.role-item.on', pop) || A.$('.role-item', pop); if (sel) sel.focus({ preventScroll: true }); }
   }
   function jobMenu(anchor) {
     const r = role();
-    A.popover(anchor, `<div class="job-card"><p class="pop-title">Job model</p><h4>${A.icon(r.ico)}${A.esc(r.name)}</h4><p>${A.esc(r.tagline)}</p>
+    A.popover(anchor, `<div class="job-card"><p class="pop-title">Your assistant</p><h4>${A.icon(r.ico)}${A.esc(r.name)}</h4><p>${A.esc(r.tagline)}</p>
       <ul>${r.skills.map((s) => `<li>${A.icon('check', 'sm')}${A.esc(s)}</li>`).join('')}</ul>
       <p class="job-how">The AI answers as your ${A.esc(r.name.toLowerCase())}. The quick actions and tools on this page match the role.</p></div>
       <div class="pop-sep"></div>
@@ -757,6 +758,7 @@
 
   function scrollToKit() {
     const k = A.$('#proKit'); if (!k) return;
+    const toolbox = k.closest('details'); if (toolbox) toolbox.open = true;
     k.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     k.classList.remove('flash'); void k.offsetWidth; k.classList.add('flash');
   }
@@ -789,11 +791,11 @@
   function paintMode() {
     const chat = mode === 'chat'; const r = role();
     A.$('#chatView').classList.toggle('pro-newchat', chat);
-    A.$('.ph-pill').textContent = chat ? 'New chat' : 'Your AI workspace';
-    A.$('.ph-title').textContent = chat ? 'How can I help you today?' : 'What will you create today?';
+    A.$('.ph-pill').textContent = chat ? 'New chat' : 'A little clarity. A lot of possibility.';
+    A.$('.ph-title').textContent = chat ? 'How can I help you today?' : 'What would you like to get done?';
     A.$('.ph-sub').textContent = chat
       ? (r.id === 'general' ? 'Ask anything, create an image, look something up, or get a PDF or Word document.' : `You're chatting with your ${r.name}. Ask anything, create an image, look something up, or get a PDF or Word document.`)
-      : `Think, build and get work done with ${A.state.brand.name}.`;
+      : 'Choose an assistant. Share an idea. Let’s make progress.';
     A.$('#proStarters').innerHTML = chat ? starters().map((x, i) => `<button type="button" class="ps-chip" data-start="${i}">${A.icon(x.ico)}<span>${A.esc(x.t)}</span></button>`).join('') : '';
   }
 
@@ -847,7 +849,7 @@
       A = api;
       vals = A.store.get('pro:tools', {}) || {};
       Object.keys(vals).forEach((k) => { if (!T[k]) delete vals[k]; else vals[k] = Object.assign(defaults(k), vals[k]); });
-      const saved = A.store.get('role', 'accountant'); roleId = roleById(saved) ? saved : 'accountant';
+      const saved = A.store.get('role', 'general'); roleId = roleById(saved) ? saved : 'general';
       bind();
     },
     onView() {
