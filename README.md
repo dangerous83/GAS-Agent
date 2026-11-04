@@ -1,9 +1,10 @@
 # GAS Agent — White-label Interface Studio
 
-A white-label front end for the GAS Agent platform with **six complete interfaces** sharing the same features:
+A white-label front end for the GAS Agent platform with **seven complete interfaces** sharing the same features. **Pro** is the main interface and opens by default.
 
 | Skin | Style | Open |
 |------|-------|------|
+| **Pro** (default) | AI workspace in deep navy: grouped sidebar, breadcrumb bar, a wide composer with the **job model** (role) picker, role quick actions, "Continue working" cards and role tools | `index.html` or `index.html#pro` |
 | Glass | Glassmorphism: frosted panels over a drifting aurora | `index.html#glass` |
 | Clay | Claymorphism: soft 3D controls, pastel color-coded tools | `index.html#clay` |
 | Cyber | Cybersecurity console: HUD panels, live status bar, secure boot | `index.html#cyber` |
@@ -11,7 +12,33 @@ A white-label front end for the GAS Agent platform with **six complete interface
 | Gold | Quiet luxury: warm black, ivory type, Cormorant serif display, champagne gold used only for hairlines, small labels and the primary action | `index.html#gold` |
 | Matte | Matte black with signal-red accents: soft depth, red primary controls and labels, slow red light trails in the background, a red light that circles the message box while typing | `index.html#matte` |
 
-Open `index.html` in a browser (no build step) to see the studio launcher and pick a skin.
+Open `index.html` in a browser (no build step) to start in the Pro workspace. The studio launcher, where you compare skins and set your brand name, is at `index.html#studio`.
+
+## Pro workspace and job models
+
+Pick a role from the dropdown in the message box (or from `Ctrl/Cmd + K`). Each role changes three things:
+
+1. **AI instructions**: the model answers as that professional (Philippine context by default for tax, accounting, HR and legal topics)
+2. **Quick actions**: the four cards under the message box. Prompt cards fill the message box and select the part to fill in; tool cards open the matching tool
+3. **Role tools**: two working calculators that update as you type, with **Ask the role about this**, **Copy** and **Save to Artifacts**
+
+| Role | Tools |
+|------|-------|
+| Accountant | VAT calculator, depreciation schedule (straight-line or double-declining) |
+| Tax Associate | Income tax estimator (TRAIN graduated rates or 8%), payroll withholding (SSS, PhilHealth, Pag-IBIG, tax, net pay) |
+| Finance Manager | Loan amortization, NPV / IRR / payback |
+| Legal Assistant | Deadline calculator (calendar or business days), contract clause check |
+| Marketing Manager | Campaign ROI (ROAS, ROI, CPA, CTR, CPC, CPM), UTM link builder |
+| Sales Executive | Pipeline forecast, commission with accelerator |
+| HR Manager | Overtime and premium pay, 13th month pay |
+| Operations Manager | Reorder point and EOQ, OEE |
+| Software Developer | JSON formatter, regex tester |
+| Agronomist | Fertilizer bags (14-14-14, urea, potash), seeding rate |
+| General assistant | No job model; general quick actions |
+
+Tax, payroll and labor figures use published 2025 rates and are estimates: the tools say so and suggest checking official sources. Roles, prompts and tools are defined in `assets/pro.js` (`ROLES` and `T`); add a role by adding an entry there.
+
+Chats remember the role they were started with, and opening one switches back to it. "Continue working" shows your latest chats with thumbnails; ⋯ opens the pin / move / archive / delete menu.
 
 ## Deploy to Vercel
 
@@ -38,7 +65,7 @@ Every push then deploys automatically: the production branch goes to your main U
 - **Plans in Philippine pesos (₱)**: Free, Pro and Team with a Monthly / Annual switch (annual = 2 months free), test-mode checkout with GCash, Maya, card or bank transfer, receipts in billing history, cancel any time. Prices are samples; edit `PLANS` in `assets/app.js`. No payment is taken until you connect a provider such as PayMongo or Stripe
 - Conversation menu (⋯ on hover, or right-click a chat): Pin to the top, Move to project (existing or new), Archive (with an Archived view to restore), Delete (with confirmation); Archive and Delete can be undone
 - Sidebar: New chat, searchable Recents, Code, Projects, Artifacts, Scheduled, Team room, Agents, Open local folder, Guide & tour, Settings
-- **Home** button and interface menu in every skin to go back to the studio or switch skins
+- **Home** button and interface menu in every skin to go back to the studio or switch skins (in Pro: the profile menu at the bottom of the sidebar)
 - **Image and video generation (test mode, no API):** 4 image variations with full-size viewer and PNG download; 6-second looping video with play/pause, scrubbing and WebM export. Scenes are painted on canvas from the prompt (city, ocean, mountains, space, forest, abstract) and saved to Artifacts
 - Time-based greeting and an optional "Use your own model" dialog (OpenRouter, OpenAI, Anthropic, Gemini, LM Studio, Ollama)
 - Composer: + menu (attach files, generate image, create video), open a real local folder, Normal / Plan / Quick modes, voice input (where the browser supports it), read replies aloud, Auto-approve, model picker
@@ -80,7 +107,10 @@ Opened as a local file or in a preview without the `api/` functions, the app sho
 
 ## Files
 - `index.html` — markup for the studio and the shared app shell
-- `assets/styles.css` — shared layout plus the Glass, Clay and Cyber skins
-- `assets/app.js` — all behavior
+- `assets/styles.css` — shared layout plus the Glass, Clay, Cyber, Nebula, Gold and Matte skins
+- `assets/pro.css` — the Pro workspace skin
+- `assets/app.js` — shared behavior
+- `assets/pro.js` — Pro workspace: job models, quick actions, role tools, Continue working
+- `assets/img/` — artwork used by Pro (Continue working thumbnails and the role card)
 - `api/` — Vercel functions for live AI chat
 - `assets/logo/` — logo mark (core + six per-skin variants) and wordmark as SVG
