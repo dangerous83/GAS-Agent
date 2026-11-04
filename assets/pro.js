@@ -35,7 +35,7 @@
       calc(v) {
         const r = v.rate / 100; const incl = v.mode === 'Includes VAT';
         const net = incl ? v.amount / (1 + r) : v.amount; const vat = net * r; const gross = net + vat;
-        return { stats: [{ l: 'Net of VAT', v: peso(net) }, { l: `VAT (${pct(v.rate, 1)})`, v: peso(vat), tone: 'accent' }, { l: 'Gross amount', v: peso(gross) }],
+        return { say: `${peso(net)} plus ${pct(v.rate, 0)} VAT (${peso(vat)}) makes ${peso(gross)}.`, stats: [{ l: 'Net of VAT', v: peso(net) }, { l: `VAT (${pct(v.rate, 1)})`, v: peso(vat), tone: 'accent' }, { l: 'Gross amount', v: peso(gross) }],
           note: incl ? 'VAT = amount × rate ÷ (1 + rate).' : 'VAT = amount × rate.' };
       },
     },
@@ -55,7 +55,7 @@
           if (y === life) d = Math.max(0, bv - v.salvage);
           acc += d; bv -= d; rows.push([`Year ${y}`, peso(d), peso(acc), peso(bv)]);
         }
-        return { stats: [{ l: 'Year 1 depreciation', v: rows[0][1], tone: 'accent' }, { l: 'Depreciable base', v: peso(base) }, { l: 'Ending book value', v: peso(bv) }],
+        return { say: `The asset loses ${rows[0][1]} in value in year 1 and is worth ${peso(bv)} after ${life} year${life === 1 ? '' : 's'}.`, stats: [{ l: 'Year 1 depreciation', v: rows[0][1], tone: 'accent' }, { l: 'Depreciable base', v: peso(base) }, { l: 'Ending book value', v: peso(bv) }],
           table: { head: ['Year', 'Depreciation', 'Accumulated', 'Book value'], rows } };
       },
     },
@@ -73,6 +73,7 @@
         const tax = flat ? taxable * .08 : incomeTax(taxable);
         const bi = bracketOf(taxable);
         return {
+          say: tax ? `You owe about ${peso(tax)} in income tax a year, around ${peso(tax / 12)} a month.` : 'No income tax is due: taxable income is ₱250,000 or less.',
           stats: [{ l: flat ? 'Base (gross − ₱250,000)' : 'Taxable income', v: peso(taxable) }, { l: 'Income tax due', v: peso(tax), tone: 'accent' }, { l: 'Effective rate', v: pct(v.income ? (tax / v.income) * 100 : 0) }, { l: 'Monthly equivalent', v: peso(tax / 12) }],
           table: flat ? null : { head: ['Annual taxable income', 'Tax', ''], rows: BRACKETS.map(([lo, hi, base, r], i) => [`${hi === Infinity ? 'Over ' + peso(lo) : (lo ? peso(lo) + ' – ' : 'Up to ') + peso(hi)}`, r ? `${base ? peso(base) + ' + ' : ''}${r * 100}% of excess over ${peso(lo)}` : 'Exempt', i === bi ? 'Your bracket' : '']) },
           note: v.option === '8% flat rate' && v.type === 'Employee' ? 'The 8% option is only for self-employed individuals and professionals, so graduated rates are used.' : 'Estimate only. Confirm with the BIR or your accountant before filing.',
@@ -93,6 +94,7 @@
         const contrib = sss + ph + pi; const taxable = Math.max(0, v.salary + v.other - contrib);
         const tax = incomeTax(taxable * 12) / 12; const net = v.salary + v.other + v.nontax - contrib - tax;
         return {
+          say: `From a ${peso(v.salary)} salary, the employee takes home about ${peso(net)} after contributions and tax.`,
           stats: [{ l: 'Withholding tax', v: peso(tax), tone: 'accent' }, { l: 'Contributions', v: peso(contrib) }, { l: 'Net take-home pay', v: peso(net), tone: 'good' }],
           table: { head: ['Item', 'Amount'], rows: [['Basic salary', peso(v.salary)], ['Other taxable pay', peso(v.other)], ['Non-taxable allowances', peso(v.nontax)], [`SSS (5% of ₱${num(msc)} MSC)`, '−' + peso(sss)], ['PhilHealth (2.5% employee share)', '−' + peso(ph)], ['Pag-IBIG', '−' + peso(pi)], ['Taxable compensation', peso(taxable)], ['Withholding tax', '−' + peso(tax)], ['Net pay', peso(net)]] },
           note: 'Uses 2025 employee rates (SSS 5% of MSC ₱5,000–₱35,000, PhilHealth 5% split, Pag-IBIG 2% up to ₱10,000). Check the latest official tables.',
@@ -114,7 +116,7 @@
           const int = bal * r; const prin = pay - int; bal = Math.max(0, bal - prin); yp += prin; yi += int;
           if (m % 12 === 0 || m === n) { rows.push([`Year ${Math.ceil(m / 12)}`, peso(yp), peso(yi), peso(bal)]); yp = 0; yi = 0; }
         }
-        return { stats: [{ l: 'Monthly payment', v: peso(pay), tone: 'accent' }, { l: 'Total interest', v: peso(pay * n - v.principal) }, { l: 'Total paid', v: peso(pay * n) }],
+        return { say: `You will pay ${peso(pay)} a month for ${n} months, with ${peso(pay * n - v.principal)} of interest in total.`, stats: [{ l: 'Monthly payment', v: peso(pay), tone: 'accent' }, { l: 'Total interest', v: peso(pay * n - v.principal) }, { l: 'Total paid', v: peso(pay * n) }],
           table: { head: ['Period', 'Principal paid', 'Interest paid', 'Ending balance'], rows } };
       },
     },
@@ -136,6 +138,7 @@
           return [`Year ${t}`, peso(c), peso(c / Math.pow(1 + v.rate / 100, t)), peso(cum)];
         });
         return {
+          say: npv >= 0 ? `Good investment: it beats your ${pct(v.rate, 0)} target by ${peso(npv)} in today's money${pay === null ? '' : ` and pays for itself in ${pay.toFixed(1)} years`}.` : `This investment falls short of your ${pct(v.rate, 0)} target by ${peso(-npv)} in today's money.`,
           stats: [{ l: 'Net present value', v: peso(npv), tone: npv >= 0 ? 'good' : 'bad' }, { l: 'IRR', v: irr === null ? 'n/a' : pct(irr * 100) }, { l: 'Payback', v: pay === null ? 'Not reached' : `${pay.toFixed(1)} years` }],
           table: { head: ['Period', 'Cash flow', 'Discounted', 'Cumulative'], rows },
           note: npv >= 0 ? 'Positive NPV: the project earns more than the discount rate.' : 'Negative NPV: the project earns less than the discount rate.',
@@ -160,6 +163,7 @@
         const left = Math.round((due - today) / 864e5);
         const mile = (f) => longDate(add(Math.max(1, Math.round(days * f))));
         return {
+          say: `Your deadline is ${longDate(due)}${left >= 0 ? `, ${left} day${left === 1 ? '' : 's'} from today` : `, which was ${-left} days ago`}.`,
           stats: [{ l: 'Deadline', v: longDate(due), tone: 'accent' }, { l: 'From today', v: left >= 0 ? `${left} day${left === 1 ? '' : 's'} left` : `${-left} days ago`, tone: left < 0 ? 'bad' : left <= 3 ? 'bad' : 'good' }],
           table: { head: ['Milestone', 'Date'], rows: [['Start (day 0, not counted)', longDate(start)], ['Halfway', mile(.5)], ['Draft ready (75%)', mile(.75)], ['Deadline', longDate(due) + (moved ? ' (moved off weekend)' : '')]] },
           note: 'Counts exclude the first day and include the last. Holidays are not included: check the official holiday list and move the date if needed.',
@@ -177,6 +181,7 @@
         const all = f.find((x) => x.k === 'have').options; const have = all.filter((o) => v.have.includes(o)); const miss = all.filter((o) => !v.have.includes(o));
         const cov = (have.length / all.length) * 100;
         return {
+          say: miss.length ? `Your draft has ${have.length} of ${all.length} standard clauses. ${miss.length} ${miss.length === 1 ? 'is' : 'are'} missing.` : 'Your draft has all the standard clauses.',
           stats: [{ l: 'Coverage', v: pct(cov, 0), tone: cov >= 80 ? 'good' : cov < 50 ? 'bad' : 'accent' }, { l: 'Missing clauses', v: String(miss.length) }, { l: 'Risk', v: cov >= 80 ? 'Low' : cov >= 50 ? 'Medium' : 'High', tone: cov >= 80 ? 'good' : cov < 50 ? 'bad' : 'accent' }],
           table: miss.length ? { head: ['Missing from your ' + v.type.toLowerCase()], rows: miss.map((x) => [x]) } : null,
           note: miss.length ? 'Ask the Legal Assistant to draft the missing clauses in plain language.' : 'All standard clauses are covered. Have a lawyer review the final draft.',
@@ -197,6 +202,7 @@
         const d = (a, b) => (b ? a / b : 0);
         const roas = d(v.revenue, v.spend); const roi = d(v.revenue - v.spend, v.spend) * 100;
         return {
+          say: `Every ₱1 spent on ads brought back ₱${roas.toFixed(2)}. Each sale cost ${peso(d(v.spend, v.conv))} in ads.`,
           stats: [{ l: 'ROAS', v: `${roas.toFixed(2)}×`, tone: roas >= 3 ? 'good' : roas < 1 ? 'bad' : 'accent' }, { l: 'ROI', v: pct(roi), tone: roi >= 0 ? 'good' : 'bad' }, { l: 'Cost per acquisition', v: peso(d(v.spend, v.conv)) }, { l: 'Click-through rate', v: pct(d(v.clicks, v.impr) * 100, 2) }],
           table: { head: ['Metric', 'Value'], rows: [['Cost per click (CPC)', peso(d(v.spend, v.clicks))], ['Cost per 1,000 impressions (CPM)', peso(d(v.spend, v.impr) * 1000)], ['Conversion rate', pct(d(v.conv, v.clicks) * 100, 2)], ['Revenue per conversion', peso(d(v.revenue, v.conv))], ['Profit after ad spend', peso(v.revenue - v.spend)]] },
         };
@@ -217,9 +223,9 @@
           const u = new URL(/^https?:\/\//i.test(v.url) ? v.url : 'https://' + v.url);
           [['utm_source', v.source], ['utm_medium', v.medium], ['utm_campaign', v.campaign], ['utm_content', v.content]].forEach(([k, x]) => { const s = String(x || '').trim().toLowerCase().replace(/\s+/g, '_'); if (s) u.searchParams.set(k, s); });
           link = u.toString();
-        } catch { return { stats: [{ l: 'Link', v: 'Enter a valid URL', tone: 'bad' }] }; }
+        } catch { return { say: 'Enter a valid web address, such as https://example.com.', stats: [{ l: 'Link', v: 'Enter a valid URL', tone: 'bad' }] }; }
         const missing = ['source', 'medium', 'campaign'].filter((k) => !String(v[k] || '').trim());
-        return { stats: [{ l: 'Status', v: missing.length ? `Add ${missing.join(', ')}` : 'Ready to share', tone: missing.length ? 'bad' : 'good' }, { l: 'Length', v: `${link.length} chars` }], pre: link, copyText: link, note: 'Values are lower-cased and spaces become underscores so reports group cleanly.' };
+        return { say: missing.length ? `Add a ${missing.join(' and ')} to finish the link.` : 'Your tracked link is ready to copy.', stats: [{ l: 'Status', v: missing.length ? `Add ${missing.join(', ')}` : 'Ready to share', tone: missing.length ? 'bad' : 'good' }, { l: 'Length', v: `${link.length} chars` }], pre: link, copyText: link, note: 'Values are lower-cased and spaces become underscores so reports group cleanly.' };
       },
     },
     commission: {
@@ -234,6 +240,7 @@
       calc(v) {
         const att = v.quota ? (v.sales / v.quota) * 100 : 0; const t1 = Math.min(v.sales, v.quota) * v.base / 100; const t2 = Math.max(0, v.sales - v.quota) * v.acc / 100;
         return {
+          say: `You reached ${pct(att, 0)} of quota and earned ${peso(t1 + t2)} in commission (${peso(v.salary + t1 + t2)} with base salary).`,
           stats: [{ l: 'Quota attainment', v: pct(att, 0), tone: att >= 100 ? 'good' : att < 70 ? 'bad' : 'accent' }, { l: 'Commission', v: peso(t1 + t2), tone: 'accent' }, { l: 'Total earnings', v: peso(v.salary + t1 + t2) }],
           table: { head: ['Tier', 'Sales', 'Rate', 'Commission'], rows: [['Up to quota', peso(Math.min(v.sales, v.quota)), pct(v.base), peso(t1)], ['Above quota', peso(Math.max(0, v.sales - v.quota)), pct(v.acc), peso(t2)]] },
         };
@@ -253,6 +260,7 @@
         const st = [['Prospecting', v.pros, .1], ['Qualified', v.qual, .25], ['Proposal', v.prop, .5], ['Negotiation', v.nego, .75], ['Verbal commit', v.commit, .9]];
         const total = st.reduce((s, x) => s + x[1], 0); const w = st.reduce((s, x) => s + x[1] * x[2], 0); const gap = v.target - w;
         return {
+          say: gap > 0 ? `Expect about ${peso(w)} this period, ${peso(gap)} short of the target.` : `Expect about ${peso(w)} this period, ${peso(-gap)} above the target.`,
           stats: [{ l: 'Weighted forecast', v: peso(w), tone: 'accent' }, { l: 'Pipeline coverage', v: `${(v.target ? total / v.target : 0).toFixed(1)}×`, tone: total >= v.target * 3 ? 'good' : 'bad' }, { l: gap > 0 ? 'Gap to target' : 'Above target', v: peso(Math.abs(gap)), tone: gap > 0 ? 'bad' : 'good' }],
           table: { head: ['Stage', 'Pipeline', 'Probability', 'Weighted'], rows: st.map(([n, x, p]) => [n, peso(x), pct(p * 100, 0), peso(x * p)]) },
           note: 'A healthy pipeline is usually about 3× the target.',
@@ -274,6 +282,7 @@
         const items = [['Regular overtime', v.ot, 1.25], ['Rest day or special day', v.rest, 1.3], ['Regular holiday', v.hol, 2], ['Night shift differential', v.night, .1]];
         const total = items.reduce((s, [, h, m]) => s + h * hr * m, 0);
         return {
+          say: `These hours add ${peso(total)} to the pay, based on an hourly rate of ${peso(hr)}.`,
           stats: [{ l: 'Daily rate', v: peso(daily) }, { l: 'Hourly rate', v: peso(hr) }, { l: 'Total premium pay', v: peso(total), tone: 'accent' }],
           table: { head: ['Type', 'Hours', 'Rate', 'Amount'], rows: items.map(([n, h, m]) => [n, num(h, 1), m === .1 ? '+10%' : `${Math.round(m * 100)}%`, peso(h * hr * m)]) },
           note: 'Uses basic Labor Code rates. Combined cases (for example overtime on a holiday) have higher rates.',
@@ -292,6 +301,7 @@
         const basic = Math.max(0, v.salary * clamp(v.months, 0, 12) - v.unpaid); const pay = basic / 12;
         const taxable = Math.max(0, pay + v.other - 90000);
         return {
+          say: `Pay ${peso(pay)} on or before 24 December${taxable ? `; ${peso(taxable)} of it is taxable` : ', all of it tax-free'}.`,
           stats: [{ l: '13th month pay', v: peso(pay), tone: 'accent' }, { l: 'Tax-exempt part', v: peso(pay + v.other - taxable) }, { l: 'Taxable excess', v: peso(taxable), tone: taxable ? 'bad' : 'good' }],
           table: { head: ['Step', 'Amount'], rows: [['Basic salary earned this year', peso(basic)], ['÷ 12 = 13th month pay', peso(pay)], ['Plus other bonuses', peso(v.other)], ['Exempt ceiling (13th month + other benefits)', peso(90000)]] },
           note: 'Due on or before 24 December. Basic salary excludes allowances and overtime.',
@@ -312,6 +322,7 @@
         const eoq = v.hold > 0 ? Math.sqrt((2 * v.demand * v.order) / v.hold) : 0; const daily = v.wd ? v.demand / v.wd : 0;
         const rop = daily * (v.lead + v.safety); const orders = eoq ? v.demand / eoq : 0; const cost = orders * v.order + (eoq / 2) * v.hold;
         return {
+          say: `Order about ${num(Math.round(eoq))} units at a time, and reorder when stock drops to ${num(Math.ceil(rop))} units.`,
           stats: [{ l: 'Order quantity (EOQ)', v: `${num(Math.round(eoq))} units`, tone: 'accent' }, { l: 'Reorder point', v: `${num(Math.ceil(rop))} units`, tone: 'accent' }, { l: 'Orders per year', v: num(orders, 1) }, { l: 'Annual order + holding cost', v: peso(cost) }],
           table: { head: ['Detail', 'Value'], rows: [['Average daily usage', `${num(daily, 1)} units`], ['Safety stock', `${num(Math.ceil(daily * v.safety))} units`], ['Days between orders', orders ? num(v.wd / orders, 1) : 'n/a']] },
           note: 'Reorder when stock on hand falls to the reorder point.',
@@ -331,6 +342,7 @@
         const run = Math.max(0, v.planned - v.down); const a = v.planned ? run / v.planned : 0; const p = run ? Math.min(1.5, (v.cycle * v.total) / 60 / run) : 0; const q = v.total ? v.good / v.total : 0;
         const oee = a * p * q * 100;
         return {
+          say: `The line runs at ${pct(oee)} of its full potential. ${[['Availability', a], ['Performance', p], ['Quality', q]].sort((m, n) => m[1] - n[1])[0][0]} is the biggest loss.`,
           stats: [{ l: 'OEE', v: pct(oee), tone: oee >= 85 ? 'good' : oee < 60 ? 'bad' : 'accent' }, { l: 'Availability', v: pct(a * 100) }, { l: 'Performance', v: pct(p * 100) }, { l: 'Quality', v: pct(q * 100) }],
           note: oee >= 85 ? 'World-class level (85% or more).' : oee >= 60 ? 'Typical range. The lowest of the three factors is the place to start.' : 'Below 60%: large room for improvement.',
         };
@@ -347,8 +359,8 @@
           const o = JSON.parse(v.src); let keys = 0;
           const depth = (x) => (x && typeof x === 'object' ? (keys += Array.isArray(x) ? 0 : Object.keys(x).length, 1 + Math.max(0, ...Object.values(x).map(depth))) : 0);
           const dp = depth(o); const out = JSON.stringify(o, null, v.indent === 'Minify' ? 0 : v.indent === '4 spaces' ? 4 : 2);
-          return { stats: [{ l: 'Status', v: 'Valid JSON', tone: 'good' }, { l: 'Keys', v: num(keys) }, { l: 'Depth', v: String(dp) }, { l: 'Size', v: `${num(new Blob([out]).size)} bytes` }], pre: out, copyText: out };
-        } catch (e) { return { stats: [{ l: 'Status', v: 'Invalid JSON', tone: 'bad' }], note: e.message }; }
+          return { say: 'Your JSON is valid.', stats: [{ l: 'Status', v: 'Valid JSON', tone: 'good' }, { l: 'Keys', v: num(keys) }, { l: 'Depth', v: String(dp) }, { l: 'Size', v: `${num(new Blob([out]).size)} bytes` }], pre: out, copyText: out };
+        } catch (e) { return { say: 'There is a problem in your JSON. See the message below.', stats: [{ l: 'Status', v: 'Invalid JSON', tone: 'bad' }], note: e.message }; }
       },
     },
     regex: {
@@ -360,9 +372,10 @@
       ],
       calc(v) {
         let re; try { re = new RegExp(v.pattern, String(v.flags).replace(/[^dgimsuvy]/g, '').replace(/(.)(?=.*\1)/g, '').replace('g', '') + 'g'); }
-        catch (e) { return { stats: [{ l: 'Status', v: 'Invalid pattern', tone: 'bad' }], note: e.message }; }
+        catch (e) { return { say: 'The pattern has an error. See the message below.', stats: [{ l: 'Status', v: 'Invalid pattern', tone: 'bad' }], note: e.message }; }
         const ms = Array.from(String(v.text).matchAll(re)).slice(0, 200);
         return {
+          say: ms.length ? `Found ${ms.length} match${ms.length === 1 ? '' : 'es'} in your text.` : 'No matches in your text.',
           stats: [{ l: 'Matches', v: String(ms.length), tone: ms.length ? 'good' : 'bad' }, { l: 'Pattern', v: `/${v.pattern}/${re.flags}` }],
           table: ms.length ? { head: ['#', 'Match', 'Index', 'Groups'], rows: ms.map((m, i) => [String(i + 1), m[0] || '(empty)', String(m.index), m.length > 1 ? m.slice(1).map((g) => g ?? '∅').join(', ') : '']) } : null,
         };
@@ -383,6 +396,7 @@
         const rows = [['Complete 14-14-14', comp], ['Urea 46-0-0', urea], ['Muriate of potash 0-0-60', mop]].map(([n, kg]) => [n, num(kg, 1), num(kg * v.area, 1), num((kg * v.area) / bag, 1)]);
         const bags = ((comp + urea + mop) * v.area) / bag;
         return {
+          say: `For ${num(v.area, 1)} ha, buy about ${rows[0][3]} bags of 14-14-14, ${rows[1][3]} bags of urea and ${rows[2][3]} bags of potash.`,
           stats: [{ l: '14-14-14', v: `${rows[0][3]} bags`, tone: 'accent' }, { l: 'Urea', v: `${rows[1][3]} bags`, tone: 'accent' }, { l: 'Potash', v: `${rows[2][3]} bags` }, { l: 'Total', v: `${num(bags, 1)} bags` }],
           table: { head: ['Fertilizer', 'kg / ha', 'Total kg', `${bag}-kg bags`], rows },
           note: 'Supplies phosphorus with 14-14-14, then tops up N with urea and K with potash. Base targets on a soil test; split N across growth stages.',
@@ -403,6 +417,7 @@
         const hills = v.row > 0 && v.hill > 0 ? 10000 / ((v.row / 100) * (v.hill / 100)) : 0; const plants = hills * Math.max(1, v.per);
         const seeds = v.germ > 0 ? (plants / (v.germ / 100)) * v.area : 0; const kg = (seeds * v.tsw) / 1e6;
         return {
+          say: `Plant about ${num(Math.round(plants))} per hectare. You need roughly ${num(kg, 1)} kg of seed for ${num(v.area, 1)} ha.`,
           stats: [{ l: 'Plants per ha', v: num(Math.round(plants)), tone: 'accent' }, { l: 'Seeds to sow', v: num(Math.round(seeds)) }, { l: 'Seed needed', v: `${num(kg, 1)} kg`, tone: 'accent' }],
           note: 'Add 5–10% for re-planting gaps. Example: hybrid corn at 75 × 25 cm gives about 53,000 plants per hectare.',
         };
@@ -516,6 +531,8 @@
 
   /* ---------------- State ---------------- */
   let A = null; let roleId = 'accountant'; let painted = ''; let showAll = false;
+  // 'overview' = the workspace home; 'chat' = a clean New chat screen.
+  let mode = 'overview'; let toOverview = false;
   const activeTool = {}; let vals = {};
 
   const role = () => roleById(roleId) || ROLES[0];
@@ -542,61 +559,67 @@
       ${t.tool ? '<span class="pt-tag">Tool</span>' : ''}</button>`).join('');
   }
 
+  const fmtNum = (val, f) => (f.step && f.step < 1) || Math.abs(+val) < 1000 ? String(val) : Number(val).toLocaleString('en-PH', { maximumFractionDigits: 4 });
   function fieldHTML(id, f, v) {
     const name = `${id}-${f.k}`; const val = v[f.k];
     const hint = f.hint ? `<small class="pk-hint">${A.esc(f.hint)}</small>` : '';
     if (f.type === 'select') return `<label class="pk-field${f.wide ? ' wide' : ''}" for="${name}"><span>${A.esc(f.label)}</span><span class="pk-input sel"><select id="${name}" data-k="${f.k}">${f.options.map((o) => `<option${o === val ? ' selected' : ''}>${A.esc(o)}</option>`).join('')}</select>${A.icon('down', 'sm')}</span>${hint}</label>`;
     if (f.type === 'textarea') return `<label class="pk-field wide" for="${name}"><span>${A.esc(f.label)}</span><textarea id="${name}" data-k="${f.k}" rows="4" spellcheck="false">${A.esc(val)}</textarea>${hint}</label>`;
-    if (f.type === 'checks') return `<fieldset class="pk-field wide pk-checks"><legend>${A.esc(f.label)}</legend><div>${f.options.map((o) => `<label class="pk-check"><input type="checkbox" data-k="${f.k}" value="${A.esc(o)}"${val.includes(o) ? ' checked' : ''}><span>${A.icon('check', 'sm')}${A.esc(o)}</span></label>`).join('')}</div></fieldset>`;
-    const type = f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text';
-    const extra = f.type === 'number' ? ` inputmode="decimal" step="${f.step || 'any'}"${f.min != null ? ` min="${f.min}"` : ''}${f.max != null ? ` max="${f.max}"` : ''}` : ' spellcheck="false"';
-    return `<label class="pk-field${f.wide ? ' wide' : ''}" for="${name}"><span>${A.esc(f.label)}</span><span class="pk-input">${f.prefix ? `<i>${f.prefix}</i>` : ''}<input id="${name}" type="${type}" data-k="${f.k}" value="${A.esc(val)}"${extra}>${f.suffix ? `<i>${A.esc(f.suffix)}</i>` : ''}</span>${hint}</label>`;
+    if (f.type === 'checks') return `<fieldset class="pk-field wide pk-checks"><legend>${A.esc(f.label)} <small>(tap to tick)</small></legend><div>${f.options.map((o) => `<label class="pk-check"><input type="checkbox" data-k="${f.k}" value="${A.esc(o)}"${val.includes(o) ? ' checked' : ''}><span>${A.icon('check', 'sm')}${A.esc(o)}</span></label>`).join('')}</div></fieldset>`;
+    const isNum = f.type === 'number';
+    const type = f.type === 'date' ? 'date' : 'text';
+    const extra = isNum ? ' inputmode="decimal" data-num="1" autocomplete="off"' : ' spellcheck="false"';
+    return `<label class="pk-field${f.wide ? ' wide' : ''}" for="${name}"><span>${A.esc(f.label)}</span><span class="pk-input">${f.prefix ? `<i>${f.prefix}</i>` : ''}<input id="${name}" type="${type}" data-k="${f.k}" value="${A.esc(isNum ? fmtNum(val, f) : val)}"${extra}>${f.suffix ? `<i>${A.esc(f.suffix)}</i>` : ''}</span>${hint}</label>`;
   }
 
   function renderKit(animate) {
     const r = role(); const box = A.$('#proKit');
     const ids = r.tools; const cur = ids.includes(activeTool[r.id]) ? activeTool[r.id] : ids[0]; activeTool[r.id] = cur;
+    const who = r.id === 'general' ? 'the assistant' : `your ${r.name}`;
     box.innerHTML = `
-      <div class="pro-sec-head"><h2 id="pk-h">${A.esc(r.id === 'general' ? 'Quick tools' : r.name + ' tools')}</h2>
-        <div class="pk-tabs" role="tablist" aria-label="Tools">${ids.map((id) => `<button type="button" role="tab" aria-selected="${id === cur}" data-tool="${id}">${A.icon(T[id].ico)}<span>${A.esc(T[id].name)}</span></button>`).join('')}</div></div>
-      <div class="pk-body${animate ? ' swap' : ''}">
-        <aside class="pk-role">
-          <img src="assets/img/cubes.webp" alt="" loading="lazy" decoding="async">
-          <div class="pk-role-in">
-            <span class="pk-badge">Job model</span>
-            <h3><span class="pk-role-ico">${A.icon(r.ico)}</span>${A.esc(r.name)}</h3>
-            <p>${A.esc(r.tagline)}</p>
-            <ul>${r.skills.map((s) => `<li>${A.icon('check', 'sm')}${A.esc(s)}</li>`).join('')}</ul>
-            <button type="button" class="pk-change" data-action="role-menu">${A.icon('sliders', 'sm')}Change role</button>
-          </div>
-        </aside>
-        <div class="pk-tool" role="tabpanel" aria-labelledby="pk-h">
-          <div class="pk-tool-head"><span class="pk-tool-ico">${A.icon(T[cur].ico)}</span><div><h3>${A.esc(T[cur].name)}</h3><p>${A.esc(T[cur].desc)}</p></div>
-            <button type="button" class="pk-reset" data-kit="reset" title="Reset to the example values">Reset</button></div>
+      <div class="pk-banner">
+        <img src="assets/img/cubes.webp" alt="" loading="lazy" decoding="async">
+        <div class="pk-banner-in">
+          <span class="pk-badge">${A.icon(r.ico, 'sm')}${A.esc(r.id === 'general' ? 'General assistant' : 'Job model · ' + r.name)}</span>
+          <h2 id="pk-h">${A.esc(r.id === 'general' ? 'Quick tools' : r.name + ' tools')}</h2>
+          <p>Pick a tool, type your numbers, and the answer appears instantly. No sign-up or formulas needed.</p>
+        </div>
+        <button type="button" class="pk-change" data-action="role-menu">${A.icon('sliders', 'sm')}Change role</button>
+      </div>
+      <div class="pk-tabs" role="tablist" aria-label="Tools">${ids.map((id) => `<button type="button" role="tab" aria-selected="${id === cur}" data-tool="${id}"><span class="pk-tab-ico">${A.icon(T[id].ico)}</span><span class="pk-tab-text"><b>${A.esc(T[id].name)}</b><small>${A.esc(T[id].desc)}</small></span></button>`).join('')}</div>
+      <div class="pk-card${animate ? ' swap' : ''}" role="tabpanel" aria-labelledby="pk-h">
+        <div class="pk-in">
+          <div class="pk-step"><b>1</b><span>Enter your details</span><button type="button" class="pk-reset" data-kit="reset" title="Put the example values back">${A.icon('clock', 'sm')}Reset</button></div>
           <form class="pk-form" data-toolform="${cur}" autocomplete="off" onsubmit="return false">${T[cur].fields.map((f) => fieldHTML(cur, f, valuesFor(cur))).join('')}</form>
+        </div>
+        <div class="pk-res">
+          <div class="pk-step"><b>2</b><span>Your answer</span></div>
           <div class="pk-out" id="pkOut" aria-live="polite"></div>
           <div class="pk-actions">
-            <button type="button" class="pk-btn primary" data-kit="ask">${A.icon('spark')}Ask ${A.esc(r.id === 'general' ? 'the assistant' : r.name)} about this</button>
-            <button type="button" class="pk-btn" data-kit="copy">${A.icon('copy')}Copy</button>
-            <button type="button" class="pk-btn" data-kit="save">${A.icon('download')}Save to Artifacts</button>
+            <button type="button" class="pk-btn primary" data-kit="ask">${A.icon('spark')}Ask ${A.esc(who)} to explain</button>
+            <button type="button" class="pk-btn" data-kit="copy" title="Copy the result">${A.icon('copy')}Copy</button>
+            <button type="button" class="pk-btn" data-kit="pdf" title="Download the result as a PDF">${A.icon('download')}PDF</button>
+            <button type="button" class="pk-btn" data-kit="save" title="Keep it in Artifacts">${A.icon('grid')}Save</button>
           </div>
         </div>
       </div>`;
     renderOut();
   }
 
-  let lastOut = null;
+  let lastOut = null; let detailsOpen = false;
   function renderOut() {
     const id = activeTool[role().id]; const tool = T[id]; const v = valuesFor(id);
-    let o; try { o = tool.calc(v, tool.fields) || {}; } catch (e) { o = { stats: [{ l: 'Error', v: e.message, tone: 'bad' }] }; }
+    let o; try { o = tool.calc(v, tool.fields) || {}; } catch (e) { o = { say: 'Something in the numbers does not work. Check the values on the left.', stats: [{ l: 'Error', v: e.message, tone: 'bad' }] }; }
     lastOut = { id, o };
     const s = (o.stats || []).map((x) => `<div class="pk-stat ${x.tone || ''}"><small>${A.esc(x.l)}</small><b>${A.esc(x.v)}</b></div>`).join('');
-    const t = o.table ? `<div class="tbl-wrap"><table class="tbl"><thead><tr>${o.table.head.map((h) => `<th>${A.esc(h)}</th>`).join('')}</tr></thead><tbody>${o.table.rows.map((r) => `<tr>${r.map((c, i) => `<td${i && /^[−₱\d-]/.test(c) ? ' class="num"' : ''}>${A.esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
-    A.$('#pkOut').innerHTML = `${s ? `<div class="pk-stats">${s}</div>` : ''}${o.pre ? `<pre class="pk-pre">${A.esc(o.pre)}</pre>` : ''}${t}${o.note ? `<p class="pk-note">${A.icon('spark', 'sm')}<span>${A.esc(o.note)}</span></p>` : ''}`;
+    const t = o.table ? `<details class="pk-details"${detailsOpen ? ' open' : ''}><summary>${A.icon('chev', 'sm')}See the full breakdown <small>${o.table.rows.length} row${o.table.rows.length === 1 ? '' : 's'}</small></summary><div class="tbl-wrap"><table class="tbl"><thead><tr>${o.table.head.map((h) => `<th>${A.esc(h)}</th>`).join('')}</tr></thead><tbody>${o.table.rows.map((r) => `<tr>${r.map((c, i) => `<td${i && /^[−₱\d-]/.test(c) ? ' class="num"' : ''}>${A.esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>` : '';
+    A.$('#pkOut').innerHTML = `${o.say ? `<p class="pk-say">${A.esc(o.say)}</p>` : ''}${s ? `<div class="pk-stats">${s}</div>` : ''}${o.pre ? `<pre class="pk-pre">${A.esc(o.pre)}</pre>` : ''}${t}${o.note ? `<p class="pk-note">${A.icon('spark', 'sm')}<span>${A.esc(o.note)}</span></p>` : ''}`;
+    const d = A.$('#pkOut .pk-details'); if (d) d.addEventListener('toggle', () => { detailsOpen = d.open; });
   }
 
   function outText(brief) {
     const { id, o } = lastOut; const tool = T[id]; const v = valuesFor(id); const L = [`${tool.name} (${role().name})`, ''];
+    if (o.say) L.push(o.say, '');
     L.push('Inputs:'); tool.fields.forEach((f) => { const x = v[f.k]; L.push(`- ${f.label}: ${Array.isArray(x) ? x.join(', ') || 'none' : `${f.prefix || ''}${f.type === 'number' ? num(+x, 2).replace(/\.00$/, '') : x}${f.suffix ? ' ' + f.suffix : ''}`}`); });
     if (o.stats && o.stats.length) { L.push('', 'Results:'); o.stats.forEach((x) => L.push(`- ${x.l}: ${x.v}`)); }
     if (o.pre) L.push('', o.pre);
@@ -616,6 +639,7 @@
       A.state.artifacts.unshift({ name, kind: 'code', lang: 'markdown', meta: `${r.name} · ${tool.name}`, time: Date.now(), code: outText(), gen: true });
       A.save(); A.renderRecents(); A.toast(`Saved ${name} to Artifacts`, 'download'); A.log(`Saved ${name}`); return;
     }
+    if (k === 'pdf') { const t = outText(); const md = `# ${tool.name}\n\n${t.split('\n').slice(2).join('\n').replace(/^(Inputs|Results):$/gm, '## $1')}`; window.GASDocs ? window.GASDocs.save('pdf', md, `${tool.name} (${r.name})`).then((n) => A.toast(`Downloaded ${n}`, 'download')).catch((e) => A.toast(e.message, 'x')) : A.toast('PDF export is not available.', 'x'); return; }
     if (k === 'ask') {
       const msg = lastOut.o.ask || `Here are the results from my ${tool.name}. Check them, explain what they mean in plain language, and tell me what I should do next.\n\n${outText(true)}`;
       A.send(msg);
@@ -665,9 +689,11 @@
   const SEC_NAMES = { projects: 'Projects', artifacts: 'Artifacts', code: 'Code', agents: 'Agents', scheduled: 'Scheduled', team: 'Team room' };
   function paintChrome() {
     const st = A.state; const c = A.current();
-    const here = st.section !== 'chat' ? SEC_NAMES[st.section] || 'Workspace' : c && c.messages.length ? c.title : 'Overview';
+    const empty = st.section === 'chat' && !(c && c.messages.length);
+    const here = st.section !== 'chat' ? SEC_NAMES[st.section] || 'Workspace' : !empty ? c.title : mode === 'chat' ? 'New chat' : 'Overview';
     A.$('#crumbHere').textContent = here;
-    A.$('[data-pro-nav="overview"]').classList.toggle('active', st.section === 'chat' && !(c && c.messages.length));
+    A.$('[data-pro-nav="overview"]').classList.toggle('active', empty && mode === 'overview');
+    A.$('.new-chat').classList.toggle('on', empty && mode === 'chat');
     const n = A.$('[data-pro-count="artifacts"]'); n.textContent = st.artifacts.length || '';
     const nm = ((st.prefs && st.prefs.displayName) || '').trim();
     A.$('#pfName').textContent = nm || 'Assistant';
@@ -741,22 +767,47 @@
     roleId = id; A.store.set('role', id);
     paintRole();
     if (changed || painted !== id) { renderTasks(!silent); renderKit(!silent); painted = id; }
+    paintMode();
     if (!silent && changed) { const r = role(); A.toast(r.id === 'general' ? 'General assistant · no job model' : `${r.name} job model · quick actions and tools updated`, r.ico); A.log(`Job model: ${r.name}`); }
+  }
+
+  function fillPrompt(p) {
+    const ta = A.$('#prompt'); ta.value = p; A.autosize(); ta.focus();
+    const a = p.indexOf('['), b = p.indexOf(']', a);
+    if (a >= 0 && b > a) ta.setSelectionRange(a, b + 1); else ta.setSelectionRange(ta.value.length, ta.value.length);
+    A.$('.composer').classList.remove('nudge'); void ta.offsetWidth; A.$('.composer').classList.add('nudge');
+  }
+  const starters = () => {
+    const r = role(); const own = r.tasks.filter((t) => !t.tool).slice(0, 2);
+    return [
+      { ico: 'image', t: 'Create an image', p: 'Generate an image of [describe what you want to see]' },
+      { ico: 'file', t: 'Write a PDF or Word document', p: 'Write a [type of document, e.g. proposal or letter] about [topic] as a PDF and Word file.' },
+      { ico: 'search', t: 'Look up a person or topic', p: 'Who is [name of a public figure, company or topic]?' },
+      ...own.map((t) => ({ ico: t.ico, t: t.t, p: t.p })),
+    ];
+  };
+  function paintMode() {
+    const chat = mode === 'chat'; const r = role();
+    A.$('#chatView').classList.toggle('pro-newchat', chat);
+    A.$('.ph-pill').textContent = chat ? 'New chat' : 'Your AI workspace';
+    A.$('.ph-title').textContent = chat ? 'How can I help you today?' : 'What will you create today?';
+    A.$('.ph-sub').textContent = chat
+      ? (r.id === 'general' ? 'Ask anything, create an image, look something up, or get a PDF or Word document.' : `You're chatting with your ${r.name}. Ask anything, create an image, look something up, or get a PDF or Word document.`)
+      : `Think, build and get work done with ${A.state.brand.name}.`;
+    A.$('#proStarters').innerHTML = chat ? starters().map((x, i) => `<button type="button" class="ps-chip" data-start="${i}">${A.icon(x.ico)}<span>${A.esc(x.t)}</span></button>`).join('') : '';
   }
 
   function openTask(i) {
     const t = role().tasks[i]; if (!t) return;
     if (t.tool) { activeTool[role().id] = t.tool; renderKit(true); scrollToKit(); setTimeout(() => { const f = A.$('#proKit .pk-form input, #proKit .pk-form select, #proKit .pk-form textarea'); if (f) f.focus({ preventScroll: true }); }, 350); return; }
-    const ta = A.$('#prompt'); ta.value = t.p; A.autosize(); ta.focus();
-    const a = t.p.indexOf('['), b = t.p.indexOf(']', a);
-    if (a >= 0 && b > a) ta.setSelectionRange(a, b + 1); else ta.setSelectionRange(ta.value.length, ta.value.length);
-    A.$('.composer').classList.remove('nudge'); void ta.offsetWidth; A.$('.composer').classList.add('nudge');
+    fillPrompt(t.p);
   }
 
   /* ---------------- Events ---------------- */
   function bind() {
     A.$('#proTasks').addEventListener('click', (e) => { const b = e.target.closest('[data-task]'); if (b) openTask(+b.dataset.task); });
     A.$('#proViewAll').addEventListener('click', () => { showAll = !showAll; renderWork(); });
+    A.$('#proStarters').addEventListener('click', (e) => { const b = e.target.closest('[data-start]'); if (b) fillPrompt(starters()[+b.dataset.start].p); });
     const kit = A.$('#proKit');
     kit.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-tool]'); if (tab) { activeTool[role().id] = tab.dataset.tool; renderKit(true); return; }
@@ -771,11 +822,16 @@
       const el = e.target; if (!el.dataset || !el.dataset.k) return;
       const id = el.closest('[data-toolform]').dataset.toolform; const v = valuesFor(id); const f = T[id].fields.find((x) => x.k === el.dataset.k);
       if (f.type === 'checks') v[f.k] = A.$$(`input[data-k="${f.k}"]`, el.closest('form')).filter((c) => c.checked).map((c) => c.value);
-      else if (f.type === 'number') v[f.k] = el.value === '' ? 0 : parseFloat(el.value);
+      else if (f.type === 'number') { const n = parseFloat(String(el.value).replace(/[,\s₱%]/g, '')); v[f.k] = Number.isFinite(n) ? n : 0; }
       else v[f.k] = el.value;
       saveVals(); renderOut();
     };
     kit.addEventListener('input', onInput); kit.addEventListener('change', onInput);
+    kit.addEventListener('focusout', (e) => {
+      const el = e.target; if (!el.dataset || !el.dataset.num) return;
+      const id = el.closest('[data-toolform]').dataset.toolform; const f = T[id].fields.find((x) => x.k === el.dataset.k);
+      el.value = fmtNum(valuesFor(id)[f.k], f);
+    });
     // Keyboard navigation inside the role dropdown
     A.$('#popover').addEventListener('keydown', (e) => {
       if (!A.$('#popover .role-menu') || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
@@ -799,8 +855,9 @@
       if (!isPro()) { A.$('#prompt').placeholder = 'How can I help you today?'; return; }
       paintRole();
       if (painted !== roleId) { renderTasks(); renderKit(); painted = roleId; }
-      renderWork(); paintChrome();
+      renderWork(); paintMode(); paintChrome();
     },
+    beforeNewChat() { mode = toOverview ? 'overview' : 'chat'; toOverview = false; },
     onOpenConvo(c) { if (isPro() && c && c.role && roleById(c.role) && c.role !== roleId) setRole(c.role, true); },
     system() {
       if (!isPro()) return '';
@@ -812,7 +869,7 @@
     paletteItems: () => ALL.map((r) => ({ g: 'Job model', label: r.name, ico: r.ico, hint: r.id === roleId ? 'Current' : 'Switch role', run: () => { if (A.state.skin !== 'pro') location.hash = 'pro'; setTimeout(() => { A.newChat(); setRole(r.id); }, 30); } })),
     action(act, el) {
       if (!isPro()) return false;
-      const map = { 'role-menu': () => roleMenu(el), 'job-menu': () => jobMenu(el), 'compose-menu': () => composeMenu(el), 'profile-menu': () => profileMenu(el), overview: () => A.newChat() };
+      const map = { 'role-menu': () => roleMenu(el), 'job-menu': () => jobMenu(el), 'compose-menu': () => composeMenu(el), 'profile-menu': () => profileMenu(el), overview: () => { toOverview = true; A.newChat(); A.$('#chatScroll').scrollTo({ top: 0 }); } };
       if (!map[act]) return false; map[act](); return true;
     },
     roles: ALL, tools: T,

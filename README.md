@@ -38,6 +38,10 @@ Pick a role from the dropdown in the message box (or from `Ctrl/Cmd + K`). Each 
 
 Tax, payroll and labor figures use published 2025 rates and are estimates: the tools say so and suggest checking official sources. Roles, prompts and tools are defined in `assets/pro.js` (`ROLES` and `T`); add a role by adding an entry there.
 
+**New chat** opens a clean chat screen with starter ideas (image, PDF/Word document, look up a person or topic, and the role's own tasks). **Overview**, or **Workspace** in the breadcrumb, returns to the top of the workspace home.
+
+Each tool shows the answer as a plain sentence first (for example "Every ₱1 spent on ads brought back ₱3.60"), then the key numbers, with the full table under "See the full breakdown". Numbers can be typed with commas.
+
 Chats remember the role they were started with, and opening one switches back to it. "Continue working" shows your latest chats with thumbnails; ⋯ opens the pin / move / archive / delete menu.
 
 ## Deploy to Vercel
@@ -74,12 +78,19 @@ Every push then deploys automatically: the production branch goes to your main U
 - White label: change the product name and subtitle in the studio or Settings; it updates every skin
 - Responsive down to phone width
 
+## Documents, images and web lookups (every skin)
+
+- **PDF and Word files:** ask for a document ("Write a leave policy as a PDF and Word file"). The AI writes it and a card offers **Download PDF** and **Download Word**. Every reply also has Copy / PDF / Word buttons, and documents are kept in Artifacts. Files are built in the browser: Word (`.docx`) by `assets/docs.js`, PDF with jsPDF (`assets/vendor/jspdf.umd.min.js`, MIT, loaded only when needed). PDFs use the standard PDF fonts, so ₱ is written as "PHP" and non-Latin scripts are not supported in PDF (use Word for those)
+- **Images:** "Generate an image of …" or + → Generate an image (free Flux model, with a local fallback)
+- **Web lookups for people and topics:** messages like "Who is …?", "look up …" or "search the web for …" call `api/search.js` (Wikipedia and DuckDuckGo, no key needed). The results go to the AI as cited sources and appear as source chips under the reply. Turn on Settings → Capabilities → Web search to look things up for every question. The AI is told to share public, professional information about public figures and not to compile private details (addresses, phone numbers, family) about private individuals
+
 ## Live AI (works right after deploying)
 
 On Vercel, chat replies come from a real model through the serverless functions in `api/`:
 
 - `api/chat.js` streams the reply (`POST /api/chat`)
 - `api/health.js` tells the app which model is answering (`GET /api/health`)
+- `api/search.js` returns web sources for a query (`GET /api/search?q=...`)
 - `api/_llm.js` picks the provider from environment variables
 
 With no setup at all it uses a free public model (Pollinations), so the app works as soon as it is deployed. To use your own provider, add **one** of these in Vercel → Project → Settings → Environment Variables, then redeploy:
@@ -110,7 +121,9 @@ Opened as a local file or in a preview without the `api/` functions, the app sho
 - `assets/styles.css` — shared layout plus the Glass, Clay, Cyber, Nebula, Gold and Matte skins
 - `assets/pro.css` — the Pro workspace skin
 - `assets/app.js` — shared behavior
-- `assets/pro.js` — Pro workspace: job models, quick actions, role tools, Continue working
+- `assets/pro.js` — Pro workspace: job models, quick actions, role tools, Continue working, New chat screen
+- `assets/docs.js` — Markdown to Word (.docx) and PDF downloads
+- `assets/vendor/` — jsPDF (MIT)
 - `assets/img/` — artwork used by Pro (Continue working thumbnails and the role card)
 - `api/` — Vercel functions for live AI chat
 - `assets/logo/` — logo mark (core + six per-skin variants) and wordmark as SVG

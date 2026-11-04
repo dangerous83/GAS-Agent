@@ -108,6 +108,7 @@
   }
 
   /* ---------------- Brand (white label) ---------------- */
+  window.GASBrand = () => state.brand.name;
   function applyBrand() {
     const { name, tagline } = state.brand;
     $$('[data-brand="name"]').forEach((el) => { el.textContent = name; });
@@ -820,7 +821,10 @@
     if (P.instructions) lines.push(`User's custom instructions:\n${P.instructions}`);
     const ws = state.workspace;
     if (ws && ws.files && ws.files.length) lines.push(`The user opened a workspace folder "${ws.name}" with ${ws.files.length} files, including:\n${ws.files.slice(0, 80).map((f) => `- ${f.name} (${f.size})`).join('\n')}`);
-    if (!P.capWeb) lines.push('You cannot browse the web in this app.');
+    lines.push('This app turns your replies into downloadable PDF and Word files, and generates images itself. When the user asks for a document, report, letter, contract, proposal, PDF or Word file, write the COMPLETE document in Markdown, starting with a "# Title" line, using headings, lists and tables; the app adds Download PDF and Download Word buttons. Never say you cannot create files or PDFs.');
+    lines.push('When asked about a person, share what reliable public sources say, focusing on public figures and professional information. Do not compile or guess private details about private individuals (home address, phone number, family members, ID numbers, location); suggest official or professional channels instead.');
+    if (AI.webContext) lines.push(AI.webContext);
+    else lines.push('No web results are attached to this message. For recent events or people you are unsure about, say your knowledge may be out of date and that the user can ask you to "search" or "look up" the topic.');
     const role = window.GASPro && window.GASPro.system();
     if (role) lines.push(role);
     return lines.join('\n\n');
@@ -1003,7 +1007,7 @@
     b.innerHTML = icon(on ? 'stop' : 'up');
   }
 
-  async function streamReply(holder, c, title) {
+  async function streamReply(holder, c, title, extra = {}) {
     const body = $('.body', holder);
     AI.ctrl = new AbortController(); setStreaming(true);
     let out = '', error = '', stopped = false, raf = 0;
@@ -1027,7 +1031,11 @@
     if (!out && !error && !stopped) html = '<p class="note">The model returned an empty reply. Try rephrasing your message.</p>';
     body.innerHTML = html; highlight(body); scrollDown(true);
     if (out) {
-      c.messages.push({ role: 'ai', text: out, html: md(out) });
+      const m = { role: 'ai', text: out, html: md(out) };
+      if (extra.sources && extra.sources.length) m.sources = extra.sources;
+      if (extra.doc && !error && !stopped) { m.doc = { title: window.GASDocs ? window.GASDocs.titleOf(out, title) : title }; saveDocArtifact(out, m.doc.title); }
+      c.messages.push(m);
+      decorateAI(holder, m); scrollDown(true);
       codeArtifacts(out, title);
     }
     return { out, error };
@@ -1225,7 +1233,7 @@
         return Object.assign({}, p, chats.length ? { text: `${p.text} · moved here: ${chats.map((c) => c.title).slice(0, 3).join(', ')}${chats.length > 3 ? '…' : ''}`, pill: ['on', `${chats.length} chat${chats.length > 1 ? 's' : ''}`] } : {});
       }) },
     artifacts: { title: 'Artifacts', sub: 'Workspace · Artifacts', icon: 'grid', desc: 'Documents, spreadsheets, PDFs and images the agent has created. New files from chat appear here.', action: 'Create in chat', run: () => newChat(),
-      items: () => state.artifacts.map((a) => ({ code: a.code, lang: a.lang, ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image', webm: 'video', code: 'code' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3', webm: 'c4' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name, media: a.media })) },
+      items: () => state.artifacts.map((a) => ({ code: a.code, lang: a.lang, doc: a.doc, name: a.name, ico: { docx: 'file', xlsx: 'sheet', pdf: 'file', png: 'image', webm: 'video', code: 'code' }[a.kind] || 'file', c: { docx: 'c1', xlsx: 'c2', pdf: 'c4', png: 'c3', webm: 'c4' }[a.kind], title: a.name, text: a.meta, foot: relTime(a.time), id: a.name, media: a.media })) },
     scheduled: { title: 'Scheduled', sub: 'Workspace · Scheduled', icon: 'clock', desc: 'Tasks the agent runs on a timetable, like a morning inbox digest or a Friday report.', action: 'New schedule', run: () => addSchedule(),
       items: () => state.schedules },
     team: { title: 'Team room', sub: 'Workspace · Team room', icon: 'users', desc: 'Share chats and agents with teammates. Everyone sees the same files and history.', action: 'Copy invite link', run: () => copy(location.href.split('#')[0] + '#' + (state.skin || 'glass'), 'Invite link copied'),
@@ -1306,7 +1314,7 @@
     }));
     $$('#sectionInner button.card').forEach((c) => c.addEventListener('click', () => {
       const it = items[+c.dataset.card];
-      if (id === 'artifacts') { if (it.media) openLightbox(it.media); else if (it.code) openCode(it.code, it.lang, it.title); else toast(`${it.title} is ready to open in the desktop app`, 'file'); }
+      if (id === 'artifacts') { if (it.media) openLightbox(it.media); else if (it.doc) openDoc(it); else if (it.code) openCode(it.code, it.lang, it.title); else toast(`${it.title} is a sample file. Ask in chat for a document and you can download it as PDF or Word.`, 'file'); }
       else if (id === 'projects' || id === 'team') { newChat(); $('#prompt').value = `Let's continue with "${it.title}". `; autosize(); $('#prompt').focus(); }
       else if (id === 'code') { newChat(); $('#prompt').value = `In ${it.title}, `; autosize(); $('#prompt').focus(); }
     }));
@@ -1342,6 +1350,7 @@
   const current = () => state.convos.find((c) => c.id === state.current);
 
   function newChat() {
+    if (window.GASPro) window.GASPro.beforeNewChat();
     state.current = null;
     state.attachments = [];
     renderAttachments();
@@ -1366,7 +1375,7 @@
     paintLogos(th);
     hydrateMedia(th);
     highlight(th);
-    scrollDown(true);
+    if (empty) $('#chatScroll').scrollTo({ top: 0 }); else scrollDown(true);
     renderRecents();
   }
   function msgEl(m) {
@@ -1377,6 +1386,7 @@
       el.innerHTML = `<div class="bubble">${esc(m.text)}${atts ? `<div class="attachments att-row">${atts}</div>` : ''}</div>`;
     } else {
       el.innerHTML = `<span class="avatar"><span class="logo" data-logo="28"></span></span><div class="body">${m.html || ''}</div>`;
+      decorateAI(el, m);
     }
     el.style.animation = 'none';
     return el;
@@ -1392,9 +1402,70 @@
     const verb = /\b(generate|create|make|draw|render|design|paint|produce|show me|give me|imagine)\b/.test(t);
     if (/\b(video|clip|animation|animate|movie|footage|reel)\b/.test(t) && (verb || /^\s*(a |an )?(\d+[- ]?second )?(video|clip|animation)\b/.test(t))) return 'video';
     if (/\b(image|images|picture|photo|illustration|drawing|wallpaper|artwork|poster|logo|painting|portrait)\b/.test(t) && verb) return 'image';
-    if (/^\s*(draw|paint|imagine)\b/.test(t)) return 'image';
+    if (/^\s*(draw|paint|imagine)\b/.test(t) || /^\s*(an? )?(image|picture|photo|illustration|poster|logo) of\b/.test(t)) return 'image';
     return null;
   }
+  function docIntent(text) {
+    const t = text.toLowerCase();
+    if (mediaIntent(text)) return null;
+    const fmt = /\bpdf\b/.test(t) ? 'pdf' : /\b(word|docx|ms word)\b/.test(t) ? 'docx' : null;
+    const verb = /\b(create|make|generate|write|draft|prepare|export|save|turn|convert|produce|give me|build|compose)\b/.test(t);
+    const noun = /\b(document|doc|report|proposal|letter|contract|memo|resume|cv|invoice|quotation|policy|sop|agreement|minutes|brief|essay|handbook|guide|certificate|summary|plan|notice|manual)\b/.test(t);
+    return (fmt && (verb || noun)) || (verb && noun) ? (fmt || 'both') : null;
+  }
+  function searchIntent(text) {
+    const t = text.toLowerCase().trim();
+    if (mediaIntent(text) || docIntent(text) && !/\b(search|look ?up|research)\b/.test(t)) return false;
+    return /^(who|what) (is|was|are|were)\s+(?!the (best|difference|meaning) )\S/.test(t) || /\b(search( the web| online)?|look ?up|google|find (info|information|out about)|tell me about|research|latest news|news about|biography|bio of|profile of|what do you know about)\b/.test(t);
+  }
+  function sampleDoc(text) {
+    const topic = text.replace(/^(please\s+)?(create|make|generate|write|draft|prepare|give me|build|compose)\s+(me\s+)?(a|an|the)?\s*/i, '').replace(/\s*(as|in|into)\s+(a\s+)?(pdf|word|docx)( and (pdf|word|docx))?( files?| documents?)?\.?$/i, '').replace(/[.?!]+$/, '').trim() || 'Document';
+    const title = topic.charAt(0).toUpperCase() + topic.slice(1, 80);
+    return `# ${title}\n\nPrepared by ${state.brand.name} on ${new Date().toLocaleDateString('en-PH', { day: 'numeric', month: 'long', year: 'numeric' })}.\n\n## Summary\n\nThis is a sample document created in offline preview. On your live site the AI writes the full content for "${topic}".\n\n## Key points\n\n- The goal and who this document is for\n- The main facts, figures and decisions\n- Risks, open questions and how to handle them\n\n## Details\n\n| Item | Owner | Due |\n|---|---|---|\n| First draft | You | This week |\n| Review | Team lead | Next week |\n| Final version | You | End of month |\n\n## Next steps\n\n1. Add your own details to each section\n2. Share it for review\n3. Download the final version as PDF or Word`;
+  }
+
+  /* Reply extras: export bar, document card and sources */
+  function sourcesHTML(list) {
+    if (!list || !list.length) return '';
+    return `<div class="sources"><span class="src-label">${icon('search')}Sources</span>${list.map((r, i) => `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" title="${esc(r.title)}"><b>${i + 1}</b>${esc(r.title.slice(0, 48))}<small>${esc(r.source || '')}</small></a>`).join('')}</div>`;
+  }
+  function docCardHTML(title) {
+    return `<div class="doc-card"><span class="dc-ico">${icon('file')}</span><span class="dc-text"><b>${esc(title)}</b><small>Ready to download</small></span><span class="dc-acts"><button type="button" class="dc-btn pdf" data-export="pdf">${icon('download')}PDF</button><button type="button" class="dc-btn word" data-export="docx">${icon('download')}Word</button></span></div>`;
+  }
+  function msgActionsHTML() {
+    return `<div class="msg-actions"><button type="button" data-msgact="copy" title="Copy the reply">${icon('copy')}<span>Copy</span></button><button type="button" data-export="pdf" title="Download this reply as a PDF">${icon('file')}<span>PDF</span></button><button type="button" data-export="docx" title="Download this reply as a Word document">${icon('file')}<span>Word</span></button></div>`;
+  }
+  function decorateAI(el, m) {
+    const body = $('.body', el); const text = m.text || htmlToText(m.html);
+    el._md = text; el._title = m.doc ? m.doc.title : '';
+    if (!text || (m.html || '').includes('media-slot')) return;
+    if (m.sources) body.insertAdjacentHTML('beforeend', sourcesHTML(m.sources));
+    if (m.doc) body.insertAdjacentHTML('beforeend', docCardHTML(m.doc.title));
+    body.insertAdjacentHTML('beforeend', msgActionsHTML());
+  }
+  function saveDocArtifact(md2, title) {
+    const name = `${title.replace(/[\\/:*?"<>|]+/g, '').slice(0, 60)}.pdf`;
+    state.artifacts = state.artifacts.filter((a) => a.name !== name);
+    state.artifacts.unshift({ name, kind: 'pdf', meta: 'Document · PDF and Word', time: now(), doc: md2, gen: true });
+    log(`Created ${name}`);
+  }
+  async function exportDoc(kind, md2, title) {
+    if (!window.GASDocs) { toast('Document export is not available.', 'x'); return; }
+    try { toast(kind === 'pdf' ? 'Creating PDF…' : 'Creating Word document…', 'file'); const name = await window.GASDocs.save(kind, md2, title || undefined); toast(`Downloaded ${name}`, 'download'); log(`Downloaded ${name}`); }
+    catch (e) { toast(e.message || 'Could not create the file.', 'x'); }
+  }
+  function openDoc(a) {
+    $('#lb-h').textContent = a.name.replace(/\.pdf$/, '');
+    $('#lbMeta').textContent = 'Document · download as PDF or Word';
+    $('#lbStage').innerHTML = `<div class="doc-preview">${md(a.doc)}</div>`;
+    const acts = $('#lbActions'); acts.innerHTML = '';
+    const title = window.GASDocs ? window.GASDocs.titleOf(a.doc, a.name) : a.name;
+    [['Copy text', 'copy', () => copy(a.doc, 'Text copied')], ['Word', 'download', () => exportDoc('docx', a.doc, title)], ['PDF', 'download', () => exportDoc('pdf', a.doc, title), true]].forEach(([l, i, fn, pr]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = pr ? 'btn-primary' : 'btn-ghost'; b.innerHTML = icon(i) + esc(l); b.onclick = fn; acts.append(b);
+    });
+    openModal('lightbox');
+  }
+
   function makeReply(text, files) {
     const t = text.toLowerCase();
     const B = [];
@@ -1426,12 +1497,7 @@
       }
       return B2;
     }
-    if (/word|docx|summary|one-page|document/.test(t)) {
-      B.push({ type: 'p', text: 'Here is a one-page summary structure. I filled it with a clear headline, three key points, risks and next steps, then saved it as a Word document in your workspace.' });
-      B.push({ type: 'list', items: ['Headline and one-sentence takeaway', 'Three key points with supporting facts', 'Risks and open questions', 'Next steps with owners and dates'] });
-      B.push({ type: 'file', name: 'One-page summary.docx', kind: 'docx', meta: `Word document · 1 page · saved to ${state.workspace.name}/` });
-      B.push({ type: 'p', text: 'Tell me the topic and I will rewrite the content around it.' });
-    } else if (/excel|xlsx|tracker|spreadsheet|priorit/.test(t)) {
+    if (/excel|xlsx|tracker|spreadsheet|priorit/.test(t)) {
       B.push({ type: 'p', text: 'I built a quarterly priorities tracker with owners, due dates, progress and status. Status turns red when progress falls behind the calendar.' });
       B.push({ type: 'table', head: ['Priority', 'Owner', 'Due', 'Progress', 'Status'], rows: [
         ['Launch onboarding v2', 'Amira', '15 Nov', '72%', ['on', 'On track']],
@@ -1504,8 +1570,26 @@
     holder.className = 'msg ai';
     holder.innerHTML = `<span class="avatar"><span class="logo" data-logo="28"></span></span><div class="body"><span class="typing" aria-label="Thinking"><i></i><i></i><i></i></span></div>`;
     $('#thread').append(holder); paintLogos(holder); scrollDown();
+    const wantDoc = docIntent(text);
+    let sources = [];
+    AI.webContext = '';
+    if (aiAvailable() && !mediaIntent(text) && AI.backend && (searchIntent(text) || (state.prefs.capWeb && !wantDoc))) {
+      $('.body', holder).innerHTML = `<span class="web-step">${icon('search')}Searching the web…</span>`;
+      try {
+        const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 8000);
+        const r = await fetch(`/api/search?q=${encodeURIComponent(text.slice(0, 300))}`, { signal: ctl.signal }); clearTimeout(tm);
+        const j = r.ok ? await r.json() : null;
+        sources = (j && j.results) || [];
+        if (sources.length) {
+          AI.webContext = `Web results for the user's latest message (search: "${j.query}"). Base facts on these, cite them inline as [1], [2] and so on, and say so if they do not answer the question:\n\n${sources.map((s, i) => `[${i + 1}] ${s.title} (${s.source}, ${s.url})\n${s.snippet}`).join('\n\n')}`;
+          log(`Web search: ${sources.length} results for "${j.query}"`);
+        } else log('Web search: no results');
+      } catch { log('Web search failed'); }
+      $('.body', holder).innerHTML = `${sources.length ? `<span class="web-step done">${icon('check')}Found ${sources.length} source${sources.length === 1 ? '' : 's'}</span>` : ''}<span class="typing" aria-label="Thinking"><i></i><i></i><i></i></span>`;
+    }
     if (aiAvailable() && !mediaIntent(text)) {
-      const { out } = await streamReply(holder, c, c.title);
+      const { out } = await streamReply(holder, c, c.title, { sources, doc: !!wantDoc });
+      AI.webContext = '';
       c.updated = now(); save(); renderRecents();
       if (out && state.voice && 'speechSynthesis' in window) {
         try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(htmlToText(md(out.replace(/```[\s\S]*?```/g, ' (code) '))).slice(0, 1500))); } catch { /* speech unavailable */ }
@@ -1516,6 +1600,14 @@
     }
     await sleep(reduced ? 50 : 650 + Math.random() * 500);
 
+    if (wantDoc) {
+      const docMd = sampleDoc(text);
+      const m = { role: 'ai', text: docMd, html: '<p class="note">Offline preview: live AI is not available here, so this is a sample document. On your Vercel site the AI writes the full content.</p>' + md(docMd), doc: { title: window.GASDocs ? window.GASDocs.titleOf(docMd) : 'Document' } };
+      const body0 = $('.body', holder); body0.innerHTML = m.html; decorateAI(holder, m);
+      c.messages.push(m); c.updated = now(); saveDocArtifact(docMd, m.doc.title); save(); renderRecents(); scrollDown(true);
+      state.busy = false; $('#sendBtn').disabled = false;
+      return;
+    }
     const blocks = makeReply(text, files);
     const body = $('.body', holder);
     body.innerHTML = '';
@@ -1622,7 +1714,7 @@
   }
   function paintModel() {
     const own = ownModelActive(), b = AI.backend, online = !!b || usingLocal();
-    $('#modelName').textContent = own ? state.model.model : (b || !AI.checked ? (state.skin === 'pro' ? 'Auto model' : 'Auto') : 'Offline');
+    $('#modelName').textContent = own ? state.model.model : (b || !AI.checked ? (state.skin === 'pro' && window.innerWidth > 640 ? 'Auto model' : 'Auto') : 'Offline');
     $('#modelDot').classList.toggle('on', online);
     $('#modelBtn').title = own ? `${state.model.provider} · ${state.model.model}` : b ? `${b.provider} · ${b.model}` : 'Offline preview';
     $('#stModel').textContent = online ? `Model: ${own ? state.model.provider : b.provider}` : 'Model: offline';
@@ -1685,10 +1777,12 @@
     popover(a, `<p class="pop-title">Add or create</p>
       <button class="pop-item" data-pick="files">${icon('clip')}<span><b>Attach files</b><small>Add documents or images as context</small></span></button>
       <button class="pop-item" data-pick="image">${icon('image')}<span><b>Generate an image</b><small>4 AI variations · free Flux model</small></span></button>
-      <button class="pop-item" data-pick="video">${icon('video')}<span><b>Create a video</b><small>6-second AI motion clip</small></span></button>`,
+      <button class="pop-item" data-pick="video">${icon('video')}<span><b>Create a video</b><small>6-second AI motion clip</small></span></button>
+      <button class="pop-item" data-pick="doc">${icon('file')}<span><b>Create a document</b><small>Download as PDF or Word</small></span></button>
+      <button class="pop-item" data-pick="search">${icon('search')}<span><b>Search the web</b><small>People, companies and topics, with sources</small></span></button>`,
       (v) => {
         if (v === 'files') { $('#fileInput').click(); return; }
-        $('#prompt').value = v === 'image' ? 'Generate an image of ' : 'Create a 6-second video of ';
+        $('#prompt').value = { image: 'Generate an image of ', video: 'Create a 6-second video of ', doc: 'Write a document about ', search: 'Search the web for ' }[v];
         autosize(); const ta = $('#prompt'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
       });
   }
@@ -2193,6 +2287,10 @@
       const sec = e.target.closest('.nav [data-section]');
       const cbBtn = e.target.closest('[data-cb]');
       if (cbBtn) { codeAction(cbBtn); return; }
+      const exp = e.target.closest('.msg [data-export]');
+      if (exp) { const m = exp.closest('.msg'); exportDoc(exp.dataset.export, m._md, m._title); return; }
+      const ma = e.target.closest('.msg [data-msgact="copy"]');
+      if (ma) { copy(ma.closest('.msg')._md, 'Reply copied'); return; }
       if (e.target.closest('[data-retry]')) { retryLast(); return; }
       const cmenu = e.target.closest('[data-convo-menu]');
       if (cmenu) { e.preventDefault(); convoMenu(cmenu); return; }
