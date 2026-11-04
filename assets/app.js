@@ -15,6 +15,7 @@
   };
 
   const SKINS = {
+    pro: { name: 'Pro', label: 'AI workspace · Navy' },
     glass: { name: 'Glass', label: 'Glassmorphism' },
     clay: { name: 'Clay', label: 'Claymorphism' },
     cyber: { name: 'Cyber', label: 'Cybersecurity' },
@@ -36,10 +37,22 @@
   /* ---------------- State ---------------- */
   const now = () => Date.now();
   const seedConvos = () => [{
-    id: 'c-hello', title: 'hello', updated: now() - 60 * 1000,
+    id: 'c-website', title: 'Website proposal', updated: now() - 2 * 3600e3, role: 'marketing',
     messages: [
-      { role: 'user', text: 'hello' },
-      { role: 'ai', html: `<p>Hello! I'm <span data-brand="name">${esc(DEFAULT_BRAND.name)}</span>. I can chat, work with files in your workspace, and create documents, spreadsheets, PDFs and images. What should we start with?</p>` },
+      { role: 'user', text: 'Draft a website redesign proposal for a mountain resort client.' },
+      { role: 'ai', html: '<p>Here is the proposal outline. I kept it to one page so the client can approve it quickly.</p><ul><li><strong>Goal:</strong> double direct bookings within 6 months</li><li><strong>Scope:</strong> new home page, booking flow, room pages and a seasonal offers hub</li><li><strong>Timeline:</strong> 8 weeks in four 2-week sprints</li><li><strong>Budget:</strong> ₱480,000, paid 40 / 40 / 20</li></ul><p>Want me to turn this into a Word document with a cover page?</p>' },
+    ],
+  }, {
+    id: 'c-campaign', title: 'Campaign ideas', updated: now() - 26 * 3600e3, role: 'marketing',
+    messages: [
+      { role: 'user', text: 'Give me campaign ideas for our new olive-oil skincare line.' },
+      { role: 'ai', html: '<p>Three directions, each with a hook and the channels that fit it:</p><ol><li><strong>“Mediterranean morning”</strong>: slow, sunlit product films for Reels and TikTok</li><li><strong>Ingredient transparency</strong>: farm-to-bottle story with the grower, for YouTube and email</li><li><strong>7-day glow challenge</strong>: creator partnerships with a discount code per creator</li></ol><p>I can build the content calendar and budget split next.</p>' },
+    ],
+  }, {
+    id: 'c-report', title: 'Monthly report', updated: now() - 30 * 3600e3, role: 'finance',
+    messages: [
+      { role: 'user', text: 'Summarize this month: revenue ₱2.4M, expenses ₱1.7M, last month revenue ₱2.1M.' },
+      { role: 'ai', html: '<p><strong>October at a glance</strong></p><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Metric</th><th>October</th><th>Change</th></tr></thead><tbody><tr><td>Revenue</td><td>₱2,400,000</td><td>+14.3%</td></tr><tr><td>Expenses</td><td>₱1,700,000</td><td>n/a</td></tr><tr><td>Net income</td><td>₱700,000</td><td>29.2% margin</td></tr></tbody></table></div><p>Revenue grew faster than costs. Next step: break expenses down by category to find the biggest driver.</p>' },
     ],
   }];
 
@@ -61,7 +74,7 @@
     choice: 'Auto',
     auto: false,
     voice: false,
-    workspace: { name: 'assistant', files: null },
+    workspace: { name: 'Workspace', files: null },
     attachments: [],
     busy: false,
     log: [],
@@ -808,6 +821,8 @@
     const ws = state.workspace;
     if (ws && ws.files && ws.files.length) lines.push(`The user opened a workspace folder "${ws.name}" with ${ws.files.length} files, including:\n${ws.files.slice(0, 80).map((f) => `- ${f.name} (${f.size})`).join('\n')}`);
     if (!P.capWeb) lines.push('You cannot browse the web in this app.');
+    const role = window.GASPro && window.GASPro.system();
+    if (role) lines.push(role);
     return lines.join('\n\n');
   }
 
@@ -1042,7 +1057,8 @@
   function route() {
     const h = location.hash.replace('#', '');
     closeAllOverlays();
-    if (SKINS[h]) openSkin(h); else openLauncher();
+    // The Pro workspace is the default page; the studio launcher lives at #studio.
+    if (h === 'studio') openLauncher(); else openSkin(SKINS[h] ? h : 'pro');
   }
   function openLauncher() {
     state.skin = null;
@@ -1071,6 +1087,8 @@
     if (id === 'nebula') Core.init();
     if (id === 'matte') Trails.init();
     if (id === 'cyber') { startClock(); if (!bootedCyber) { bootedCyber = true; boot(); } } else stopClock();
+    paintModel();
+    if (window.GASPro) window.GASPro.onView();
   }
 
   /* Cyber boot sequence */
@@ -1142,6 +1160,7 @@
     }
     $('#recents').innerHTML = html;
     $('#artifactCount').textContent = state.artifacts.length || '';
+    proView();
   }
 
   /* Conversation actions: pin, move to project, archive, delete */
@@ -1246,6 +1265,7 @@
     renderRecents();
     closeNav();
   }
+  const proView = () => { if (window.GASPro) window.GASPro.onView(); };
 
   function renderSection(id, flash) {
     const s = SECTIONS[id];
@@ -1331,6 +1351,7 @@
   }
   function openConvo(id) {
     state.current = id;
+    if (window.GASPro) window.GASPro.onOpenConvo(current());
     showSection('chat');
     renderThread();
   }
@@ -1433,7 +1454,8 @@
       B.push({ type: 'p', text: `Hello! I'm ${brand}. I can chat, work with files in your workspace, and create documents, spreadsheets, PDFs and images. What should we start with?` });
     } else {
       const short = text.length > 60 ? text.slice(0, 57) + '…' : text;
-      B.push({ type: 'p', text: `Here's how I would approach "${short}":` });
+      const rn = window.GASPro && window.GASPro.roleName();
+      B.push({ type: 'p', text: rn ? `As your ${rn}, here's how I would approach "${short}":` : `Here's how I would approach "${short}":` });
       B.push({ type: 'list', items: ['Clarify the goal and what a good result looks like', 'Gather what I need from your workspace files', 'Draft the result and save it where you can find it'] });
       B.push({ type: 'p', text: state.auto ? 'Auto-approve is on, so I will go ahead with file changes without asking.' : 'I will ask before creating or changing any files. Shall I start?' });
     }
@@ -1463,7 +1485,7 @@
     $('#sendBtn').disabled = true;
     let c = current();
     if (!c) {
-      c = { id: 'c-' + now().toString(36), title: text.length > 42 ? text.slice(0, 40) + '…' : text, updated: now(), messages: [] };
+      c = { id: 'c-' + now().toString(36), title: text.length > 42 ? text.slice(0, 40) + '…' : text, updated: now(), messages: [], role: window.GASPro ? window.GASPro.roleId() : undefined };
       state.convos.unshift(c);
       state.current = c.id;
     }
@@ -1600,7 +1622,7 @@
   }
   function paintModel() {
     const own = ownModelActive(), b = AI.backend, online = !!b || usingLocal();
-    $('#modelName').textContent = own ? state.model.model : (b || !AI.checked ? 'Auto' : 'Offline');
+    $('#modelName').textContent = own ? state.model.model : (b || !AI.checked ? (state.skin === 'pro' ? 'Auto model' : 'Auto') : 'Offline');
     $('#modelDot').classList.toggle('on', online);
     $('#modelBtn').title = own ? `${state.model.provider} · ${state.model.model}` : b ? `${b.provider} · ${b.model}` : 'Offline preview';
     $('#stModel').textContent = online ? `Model: ${own ? state.model.provider : b.provider}` : 'Model: offline';
@@ -1656,8 +1678,8 @@
   }
   function skinMenu(a) {
     popover(a, `<p class="pop-title">Interface</p>` + Object.entries(SKINS).map(([k, v]) => `<button class="pop-item" data-pick="${k}"><span class="sw sw-${k}"></span><span><b>${v.name}</b><small>${v.label}</small></span>${state.skin === k ? icon('check', 'chk') : ''}</button>`).join('')
-      + `<div class="pop-sep"></div><button class="pop-item" data-pick="__home">${icon('home')}<span><b>Home</b><small>Back to all six interfaces</small></span></button>`,
-      (v) => { location.hash = v === '__home' ? '' : v; });
+      + `<div class="pop-sep"></div><button class="pop-item" data-pick="__home">${icon('home')}<span><b>Studio</b><small>Compare all seven interfaces</small></span></button>`,
+      (v) => { location.hash = v === '__home' ? 'studio' : v; });
   }
   function plusMenu(a) {
     popover(a, `<p class="pop-title">Add or create</p>
@@ -1699,7 +1721,8 @@
       { g: 'Actions', label: 'Guide & tour', ico: 'compass', run: startTour },
       ...Object.entries(SECTIONS).map(([k, s]) => ({ g: 'Go to', label: s.title, ico: s.icon, run: () => showSection(k) })),
       ...Object.entries(SKINS).map(([k, s]) => ({ g: 'Interface', label: `${s.name} interface`, ico: 'layers', hint: s.label, run: () => { location.hash = k; } })),
-      { g: 'Interface', label: 'Back to studio', ico: 'home', run: () => { location.hash = ''; } },
+      { g: 'Interface', label: 'Back to studio', ico: 'home', run: () => { location.hash = 'studio'; } },
+      ...(window.GASPro ? window.GASPro.paletteItems() : []),
       ...state.convos.filter((c) => !c.archived).map((c) => ({ g: 'Chats', label: c.title, ico: 'search', hint: relTime(c.updated), run: () => openConvo(c.id) })),
     ];
     return cmds;
@@ -2111,9 +2134,11 @@
   /* ---------------- Tour ---------------- */
   const TOUR = [
     { sel: '.sidebar', title: 'Your workspace', text: 'Start new chats, find recent ones, and jump to Code, Projects, Artifacts, Scheduled tasks, the Team room and Agents.' },
+    { sel: '#roleBtn', title: 'Job model', text: 'Pick a role such as Accountant, Tax Associate or Agronomist. The AI takes on that role, and the quick actions and tools below the message box change to match it.' },
+    { sel: '#proKit', title: 'Role tools', text: 'Each role has working calculators and tools. Results update as you type; ask the AI to explain them, copy them or save them to Artifacts.' },
     { sel: '#modelBtn', title: 'Model', text: 'Auto uses the built-in AI. Choose “Use your own model” to plug in your own API key or a local model.' },
     { sel: '.composer', title: 'Ask anything', text: 'Attach files, generate images and videos with the + button, pick a folder, switch modes, use your voice and choose whether the agent can act without asking.' },
-    { sel: '.skin-btn', title: 'Switch interface', text: 'Jump between all six interfaces at any time. Your chats and settings come with you.' },
+    { sel: '.skin-btn', title: 'Switch interface', text: 'Jump between all seven interfaces at any time. Your chats and settings come with you.' },
     { sel: '.home-btn', title: 'Back home', text: 'Return to the studio home page to compare and choose another interface.' },
   ];
   let tourI = -1;
@@ -2216,6 +2241,7 @@
         'auto': () => { state.auto = !state.auto; a.setAttribute('aria-pressed', state.auto); toast(state.auto ? 'Auto-approve on: the agent acts without asking' : 'Auto-approve off: the agent asks first'); log(`Auto-approve ${state.auto ? 'on' : 'off'}`); },
       };
       if (map[act]) { e.preventDefault(); map[act](); }
+      else if (window.GASPro && window.GASPro.action(act, a)) e.preventDefault();
     });
 
     $('#composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
@@ -2271,6 +2297,13 @@
   paintModel();
   checkBackend();
   window.addEventListener('load', () => highlight(document));
+  if (window.GASPro) {
+    window.GASPro.init({
+      state, store, $, $$, esc, icon, toast, log, md, sleep, save, send, newChat, openConvo, showSection, renderRecents,
+      popover, closePopover, openSettings, openPalette, pickFolder, startTour, autosize, paintLogos, applyBrand, copy, downloadText, openCode,
+      current, aiAvailable: () => aiAvailable(), skins: SKINS,
+    });
+  }
   renderRecents();
   renderThread();
   log('Session started');
